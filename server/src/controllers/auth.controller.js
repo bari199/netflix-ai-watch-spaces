@@ -222,25 +222,25 @@ export const verifyEmailController = async (req, res) => {
   }
 };
 
-// Send welcome email only when email verification is enabled
-const emailVerificationEnabled =
-  process.env.EMAIL_VERIFICATION_ENABLED !== "false";
+// // Send welcome email only when email verification is enabled
+// const emailVerificationEnabled =
+//   process.env.EMAIL_VERIFICATION_ENABLED !== "false";
 
-if (emailVerificationEnabled && !user.welcomeEmailSentAt) {
-  try {
-    await sendEmail({
-      to: user.email,
-      subject: "Welcome to Netflix AI Watch Spaces!",
-      htmlContent: welcomeEmail({
-        name: user.name,
-      }),
-    });
+// if (emailVerificationEnabled && !user.welcomeEmailSentAt) {
+//   try {
+//     await sendEmail({
+//       to: user.email,
+//       subject: "Welcome to Netflix AI Watch Spaces!",
+//       htmlContent: welcomeEmail({
+//         name: user.name,
+//       }),
+//     });
 
-    user.welcomeEmailSentAt = new Date();
-    await user.save();
+//     user.welcomeEmailSentAt = new Date();
+//     await user.save();
 
-    console.log(`Welcome email sent successfully to ${user.email}`);
-  } catch (error) {
-    console.error("Welcome email delivery failed:", error.message);
-  }
-}
+//     console.log(`Welcome email sent successfully to ${user.email}`);
+//   } catch (error) {
+//     console.error("Welcome email delivery failed:", error.message);
+//   }
+// }

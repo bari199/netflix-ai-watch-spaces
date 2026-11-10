@@ -12,6 +12,10 @@ import {
   joinWatchSpaceController,
   leaveWatchSpaceController,
   endWatchSpaceController,
+  setParticipantMuteController,
+  removeParticipantController,
+  setWatchSpaceLockController,
+  transferWatchSpaceHostController,
 } from "../controllers/watchSpace.controller.js";
 
 const router = express.Router();
@@ -33,12 +37,26 @@ router.post(
   "/",
   authenticate,
   authorizeRoles("host", "admin"),
+
   body("titleId").isMongoId().withMessage("Invalid Title ID"),
+
   body("isPrivate").optional().isBoolean(),
+
   body("maxParticipants")
     .optional()
     .isInt({ min: 2, max: 50 })
     .withMessage("Max participants must be between 2 and 50"),
+
+  body("aiVerbosity")
+    .optional()
+    .isIn(["minimal", "normal", "chatty"])
+    .withMessage("AI verbosity must be minimal, normal, or chatty"),
+
+  body("votingEnabled")
+    .optional()
+    .isBoolean({ strict: true })
+    .withMessage("Voting enabled must be a boolean"),
+
   validate,
   createWatchSpaceController,
 );
@@ -62,7 +80,7 @@ router.post(
   leaveWatchSpaceController,
 );
 
-// Host/Admin: End WatchSpace (service verifies actual host)
+// Host/Admin: End WatchSpace
 router.post(
   "/:watchSpaceId/end",
   authenticate,
@@ -70,6 +88,68 @@ router.post(
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   validate,
   endWatchSpaceController,
+);
+
+// Host/Admin: Mute or Unmute Participant
+router.patch(
+  "/:watchSpaceId/participants/:participantId/mute",
+  authenticate,
+  authorizeRoles("host", "admin"),
+
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+
+  param("participantId").isMongoId().withMessage("Invalid Participant ID"),
+
+  body("isMuted")
+    .isBoolean({ strict: true })
+    .withMessage("isMuted must be a boolean"),
+
+  validate,
+  setParticipantMuteController,
+);
+
+// Host/Admin: Remove Participant
+router.delete(
+  "/:watchSpaceId/participants/:participantId",
+  authenticate,
+  authorizeRoles("host", "admin"),
+
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+
+  param("participantId").isMongoId().withMessage("Invalid Participant ID"),
+
+  validate,
+  removeParticipantController,
+);
+
+// Host/Admin: Lock or Unlock WatchSpace
+router.patch(
+  "/:watchSpaceId/lock",
+  authenticate,
+  authorizeRoles("host", "admin"),
+
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+
+  body("isLocked")
+    .isBoolean({ strict: true })
+    .withMessage("isLocked must be a boolean"),
+
+  validate,
+  setWatchSpaceLockController,
+);
+
+// Host/Admin: Transfer WatchSpace Host
+router.patch(
+  "/:watchSpaceId/transfer-host",
+  authenticate,
+  authorizeRoles("host", "admin"),
+
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+
+  body("newHostId").isMongoId().withMessage("Invalid new Host ID"),
+
+  validate,
+  transferWatchSpaceHostController,
 );
 
 export default router;
