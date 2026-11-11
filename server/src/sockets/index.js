@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import registerRoomHandlers from "./room.socket.js";
 import registerPlaybackHandlers from "./playback.socket.js";
+import registerChatHandlers from "./chat.socket.js";
 
 const initializeSocket = (httpServer) => {
   const io = new Server(httpServer, {
@@ -46,6 +47,7 @@ const initializeSocket = (httpServer) => {
     // Register WatchSpace room events
     registerRoomHandlers(io, socket);
     registerPlaybackHandlers(io, socket);
+    registerChatHandlers(io, socket);
 
     socket.on("disconnect", (reason) => {
       console.log(`Socket disconnected: ${socket.user._id} - ${reason}`);
