@@ -4,6 +4,8 @@ import {
   getTitleById,
   updateTitle,
   deleteTitle,
+  getTitleThumbnail,
+  getTitleVideo,
 } from "../services/title.service.js";
 
 // Handle controller errors
@@ -40,11 +42,13 @@ const handleTitleError = (res, error) => {
   });
 };
 
-// Create title
 // Create title with video upload
 export const createTitleController = async (req, res) => {
   try {
-    if (!req.file) {
+    const videoFile = req.files?.video?.[0];
+    const thumbnailFile = req.files?.thumbnail?.[0];
+
+    if (!videoFile) {
       return res.status(400).json({
         success: false,
         message: "Video file is required",
@@ -69,7 +73,12 @@ export const createTitleController = async (req, res) => {
       });
     }
 
-    const title = await createTitle(titleData, req.user._id, req.file);
+    const title = await createTitle(
+      titleData,
+      req.user._id,
+      videoFile,
+      thumbnailFile,
+    );
 
     return res.status(201).json({
       success: true,
@@ -113,7 +122,29 @@ export const getTitleByIdController = async (req, res) => {
 // Update title
 export const updateTitleController = async (req, res) => {
   try {
-    const title = await updateTitle(req.params.titleId, req.body);
+    const thumbnailFile = req.files?.thumbnail?.[0];
+
+    const updates = {
+      ...req.body,
+    };
+
+    // Parse genre from multipart/form-data
+    if (typeof updates.genre === "string") {
+      try {
+        updates.genre = JSON.parse(updates.genre);
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid genre JSON format",
+        });
+      }
+    }
+
+    if (thumbnailFile) {
+      updates.thumbnailFile = thumbnailFile;
+    }
+
+    const title = await updateTitle(req.params.titleId, updates);
 
     return res.status(200).json({
       success: true,
@@ -136,5 +167,93 @@ export const deleteTitleController = async (req, res) => {
     });
   } catch (error) {
     return handleTitleError(res, error);
+  }
+};
+
+// Get title thumbnail
+export const getTitleThumbnailController = async (req, res) => {
+  try {
+    const result = await getTitleThumbnail(req.params.titleId);
+
+    res.set({
+      "Content-Type": result.ContentType || "application/octet-stream",
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+    });
+
+    result.Body.on("error", (error) => {
+      console.error("Thumbnail stream error:", error.message);
+
+      if (!res.headersSent) {
+        res.status(500).end();
+      } else {
+        res.destroy(error);
+      }
+    });
+
+    result.Body.pipe(res);
+  } catch (error) {
+    return handleTitleError(res, error);
+  }
+};
+
+// Stream title video with HTTP Range support
+export const getTitleVideoController = async (req, res) => {
+  try {
+    const result = await getTitleVideo(req.params.titleId, req.headers.range);
+
+    const headers = {
+      "Content-Type": result.ContentType || "application/octet-stream",
+      "Content-Length": result.ContentLength,
+      "Accept-Ranges": result.AcceptRanges || "bytes",
+      "Cache-Control": "private, no-cache",
+      "X-Content-Type-Options": "nosniff",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+    };
+
+    if (result.ContentRange) {
+      headers["Content-Range"] = result.ContentRange;
+    }
+
+    res.set(headers);
+    res.status(result.ContentRange ? 206 : 200);
+
+    result.Body.on("error", (error) => {
+      console.error("Video stream error:", error.message);
+
+      if (!res.headersSent) {
+        res.status(500).end();
+      } else {
+        res.destroy(error);
+      }
+    });
+
+    result.Body.pipe(res);
+  } catch (error) {
+    console.error("Get title video error:", error.message);
+
+    if (error.statusCode === 416) {
+      return res
+        .status(416)
+        .set("Content-Range", error.contentRange)
+        .set("Accept-Ranges", "bytes")
+        .json({
+          success: false,
+          message: error.message,
+        });
+    }
+
+    if (error.message === "Title not found") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to stream video",
+    });
   }
 };

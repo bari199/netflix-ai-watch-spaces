@@ -5,6 +5,8 @@ import {
   logoutUser,
   verifyEmail,
   createTokenPair,
+  sendWelcomeEmail,
+  
 } from "../services/auth.service.js";
 
 const refreshCookieOptions = {
@@ -15,9 +17,10 @@ const refreshCookieOptions = {
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
-// Google OAuth callback
+// ==========================================
+// Google OAuth Callback
+// ==========================================
 
-// Google OAuth callback
 export const googleAuthCallback = async (req, res) => {
   try {
     if (!req.user) {
@@ -31,12 +34,10 @@ export const googleAuthCallback = async (req, res) => {
 
     res.cookie("refreshToken", result.refreshToken, refreshCookieOptions);
 
-    return res.status(200).json({
-      success: true,
-      message: "Google login successful",
-      accessToken: result.accessToken,
-      user: result.user,
-    });
+    // Send welcome email only once
+    await sendWelcomeEmail(req.user);
+
+    return res.redirect(process.env.CLIENT_URL || "http://localhost:5173");
   } catch (error) {
     console.error("Google OAuth callback error:", error.message);
 
@@ -46,6 +47,10 @@ export const googleAuthCallback = async (req, res) => {
     });
   }
 };
+
+// ==========================================
+// Facebook OAuth Callback
+// ==========================================
 
 export const facebookAuthCallback = async (req, res) => {
   try {
@@ -60,12 +65,10 @@ export const facebookAuthCallback = async (req, res) => {
 
     res.cookie("refreshToken", result.refreshToken, refreshCookieOptions);
 
-    return res.status(200).json({
-      success: true,
-      message: "Facebook login successful",
-      accessToken: result.accessToken,
-      user: result.user,
-    });
+    // Send welcome email only once
+    await sendWelcomeEmail(req.user);
+
+    return res.redirect(process.env.CLIENT_URL || "http://localhost:5173");
   } catch (error) {
     console.error("Facebook OAuth callback error:", error.message);
 
@@ -76,16 +79,31 @@ export const facebookAuthCallback = async (req, res) => {
   }
 };
 
+// ==========================================
 // Register
+// ==========================================
 
 export const register = async (req, res) => {
   try {
+    // Temporary avatar upload debugging
+    console.log(
+      "Registration avatar received:",
+      req.file
+        ? {
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size,
+          }
+        : "NO AVATAR FILE",
+    );
+
     const { name, email, password } = req.body;
 
     const result = await registerUser({
       name,
       email,
       password,
+      avatarFile: req.file || null,
     });
 
     return res.status(201).json({
@@ -95,6 +113,8 @@ export const register = async (req, res) => {
       user: result.user,
     });
   } catch (error) {
+    console.error("Registration error:", error.message);
+
     const statusCode =
       error.message === "Email is already registered" ? 409 : 400;
 
@@ -105,36 +125,10 @@ export const register = async (req, res) => {
   }
 };
 
-// Register controller for admin
-// export const register = async (req, res) => {
-//   try {
-//     const { name, email, password } = req.body;
-
-//     const result = await registerUser({
-//       name,
-//       email,
-//       password,
-//     });
-
-//     return res.status(201).json({
-//       success: true,
-//       message: result.emailVerificationRequired
-//         ? "Registration successful. Please verify your email."
-//         : "Registration successful.",
-//       emailVerificationRequired: result.emailVerificationRequired,
-//       user: result.user,
-//     });
-//   } catch (error) {
-//     const statusCode =
-//       error.message === "Email is already registered" ? 409 : 400;
-
-//     return res.status(statusCode).json({
-//       success: false,
-//       message: error.message,
-//     });
-//   }
-// };
+// ==========================================
 // Login
+// ==========================================
+
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -160,9 +154,13 @@ export const login = async (req, res) => {
   }
 };
 
+// ==========================================
+// Logout
+// ==========================================
+
 export const logout = async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
+    const refreshToken = req.cookies?.refreshToken;
 
     await logoutUser(refreshToken);
 
@@ -178,6 +176,8 @@ export const logout = async (req, res) => {
       message: "Logout successful",
     });
   } catch (error) {
+    console.error("Logout error:", error.message);
+
     return res.status(500).json({
       success: false,
       message: "Logout failed",
@@ -185,9 +185,13 @@ export const logout = async (req, res) => {
   }
 };
 
+// ==========================================
+// Refresh Access Token
+// ==========================================
+
 export const refresh = async (req, res) => {
   try {
-    const token = req.cookies.refreshToken;
+    const token = req.cookies?.refreshToken;
 
     const result = await refreshAccessToken(token);
 
@@ -207,11 +211,18 @@ export const refresh = async (req, res) => {
   }
 };
 
+// ==========================================
+// Email Verification
+// ==========================================
+
 export const verifyEmailController = async (req, res) => {
   try {
     const { email, token } = req.query;
 
-    const result = await verifyEmail({ email, token });
+    const result = await verifyEmail({
+      email,
+      token,
+    });
 
     return res.status(200).json(result);
   } catch (error) {
@@ -221,26 +232,3 @@ export const verifyEmailController = async (req, res) => {
     });
   }
 };
-
-// // Send welcome email only when email verification is enabled
-// const emailVerificationEnabled =
-//   process.env.EMAIL_VERIFICATION_ENABLED !== "false";
-
-// if (emailVerificationEnabled && !user.welcomeEmailSentAt) {
-//   try {
-//     await sendEmail({
-//       to: user.email,
-//       subject: "Welcome to Netflix AI Watch Spaces!",
-//       htmlContent: welcomeEmail({
-//         name: user.name,
-//       }),
-//     });
-
-//     user.welcomeEmailSentAt = new Date();
-//     await user.save();
-
-//     console.log(`Welcome email sent successfully to ${user.email}`);
-//   } catch (error) {
-//     console.error("Welcome email delivery failed:", error.message);
-//   }
-// }

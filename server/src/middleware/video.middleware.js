@@ -1,15 +1,31 @@
 import multer from "multer";
 
-const allowedMimeTypes = ["video/mp4", "video/webm", "video/quicktime"];
+const allowedVideoMimeTypes = ["video/mp4", "video/webm", "video/quicktime"];
+
+const allowedImageMimeTypes = ["image/jpeg", "image/png", "image/webp"];
 
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, callback) => {
-  if (!allowedMimeTypes.includes(file.mimetype)) {
-    return callback(new Error("Only MP4, WEBM and MOV videos are allowed"));
+  if (
+    file.fieldname === "video" &&
+    allowedVideoMimeTypes.includes(file.mimetype)
+  ) {
+    return callback(null, true);
   }
 
-  callback(null, true);
+  if (
+    file.fieldname === "thumbnail" &&
+    allowedImageMimeTypes.includes(file.mimetype)
+  ) {
+    return callback(null, true);
+  }
+
+  callback(
+    new Error(
+      "Invalid file type. Video: MP4, WEBM, MOV. Thumbnail: JPEG, PNG, WEBP.",
+    ),
+  );
 };
 
 const uploadVideo = multer({
@@ -17,7 +33,7 @@ const uploadVideo = multer({
   fileFilter,
   limits: {
     fileSize: 500 * 1024 * 1024, // 500 MB
-    files: 1,
+    files: 2,
   },
 });
 

@@ -4,6 +4,7 @@ import { randomBytes, createHash } from "node:crypto";
 import sendEmail from "../config/brevo.js";
 import verificationEmail from "../utils/emailTemplates/verificationEmail.js";
 import welcomeEmail from "../utils/emailTemplates/welcomeEmail.js";
+import { uploadAvatarBuffer } from "../services/avatar.service.js";
 
 const sanitizeUser = (user) => {
   const userData = user.toObject();
@@ -19,7 +20,7 @@ const sanitizeUser = (user) => {
 
 // Register new user
 
-export const registerUser = async ({ name, email, password }) => {
+export const registerUser = async ({ name, email, password, avatarFile }) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   const existingUser = await User.findOne({
@@ -30,12 +31,17 @@ export const registerUser = async ({ name, email, password }) => {
     throw new Error("Email is already registered");
   }
 
+  // Upload avatar to MinIO (if provided)
+  const avatarUrl = avatarFile ? await uploadAvatarBuffer(avatarFile) : "";
+
   const user = await User.create({
     name,
     email: normalizedEmail,
     password,
+    avatar: avatarUrl,
   });
 
+  // Send email verification
   await sendVerificationEmail(user);
 
   return {
@@ -44,8 +50,7 @@ export const registerUser = async ({ name, email, password }) => {
   };
 };
 
-
-// Register new user for admin 
+// Register new user for admin
 // export const registerUser = async ({ name, email, password }) => {
 //   const normalizedEmail = email.toLowerCase().trim();
 
@@ -206,8 +211,10 @@ export const sendVerificationEmail = async (user) => {
 
   await user.save();
 
+  const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+
   const verificationUrl =
-    `${process.env.API_BASE_URL}/api/auth/verify-email` +
+    `${CLIENT_URL}/verify-email` +
     `?email=${encodeURIComponent(user.email)}` +
     `&token=${verificationToken}`;
 
@@ -224,6 +231,27 @@ export const sendVerificationEmail = async (user) => {
     success: true,
     message: "Verification email sent successfully",
   };
+};
+
+export const sendWelcomeEmail = async (user) => {
+  if (user.welcomeEmailSentAt) return;
+
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: "Welcome to Netflix AI Watch Spaces!",
+      htmlContent: welcomeEmail({
+        name: user.name,
+      }),
+    });
+
+    user.welcomeEmailSentAt = new Date();
+    await user.save();
+
+    console.log(`Welcome email sent successfully to ${user.email}`);
+  } catch (error) {
+    console.error("Welcome email delivery failed:", error.message);
+  }
 };
 
 export const verifyEmail = async ({ email, token }) => {

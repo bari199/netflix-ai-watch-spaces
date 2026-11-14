@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import registerRoomHandlers from "./room.socket.js";
 import registerPlaybackHandlers from "./playback.socket.js";
 import registerChatHandlers from "./chat.socket.js";
+import registerPresenceHandlers from "./presence.socket.js";
 
 const initializeSocket = (httpServer) => {
   const io = new Server(httpServer, {
@@ -48,6 +49,7 @@ const initializeSocket = (httpServer) => {
     registerRoomHandlers(io, socket);
     registerPlaybackHandlers(io, socket);
     registerChatHandlers(io, socket);
+    registerPresenceHandlers(io, socket);
 
     socket.on("disconnect", (reason) => {
       console.log(`Socket disconnected: ${socket.user._id} - ${reason}`);

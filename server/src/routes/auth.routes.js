@@ -1,5 +1,5 @@
 import express from "express";
-import { body } from "express-validator";
+import { body, param } from "express-validator";
 import passport from "../config/passport.js";
 
 import {
@@ -11,7 +11,7 @@ import {
   googleAuthCallback,
   facebookAuthCallback,
 } from "../controllers/auth.controller.js";
-
+import uploadAvatar from "../middleware/avatar.middleware.js";
 import validate from "../middleware/validate.middleware.js";
 
 const router = express.Router();
@@ -35,7 +35,13 @@ const loginValidation = [
 ];
 
 // POST /api/auth/register
-router.post("/register", registerValidation, validate, register);
+router.post(
+  "/register",
+  uploadAvatar.single("avatar"),
+  registerValidation,
+  validate,
+  register,
+);
 
 // POST /api/auth/login
 router.post("/login", loginValidation, validate, login);
@@ -101,5 +107,7 @@ router.get("/facebook/callback", (req, res, next) => {
     return facebookAuthCallback(req, res, next);
   })(req, res, next);
 });
+
+
 
 export default router;

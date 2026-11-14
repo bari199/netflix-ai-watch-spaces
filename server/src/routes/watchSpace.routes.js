@@ -2,7 +2,9 @@ import express from "express";
 import { param, body } from "express-validator";
 
 import authenticate from "../middleware/auth.middleware.js";
-import authorizeRoles from "../middleware/role.middleware.js";
+import authorizeRoles, {
+  authorizeWatchSpaceHost,
+} from "../middleware/role.middleware.js";
 import validate from "../middleware/validate.middleware.js";
 
 import {
@@ -80,21 +82,21 @@ router.post(
   leaveWatchSpaceController,
 );
 
-// Host/Admin: End WatchSpace
+// Current WatchSpace Host/Admin: End WatchSpace
 router.post(
   "/:watchSpaceId/end",
   authenticate,
-  authorizeRoles("host", "admin"),
+  authorizeWatchSpaceHost,
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   validate,
   endWatchSpaceController,
 );
 
-// Host/Admin: Mute or Unmute Participant
+// Current WatchSpace Host/Admin: Mute or Unmute Participant
 router.patch(
   "/:watchSpaceId/participants/:participantId/mute",
   authenticate,
-  authorizeRoles("host", "admin"),
+  authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
 
@@ -108,11 +110,11 @@ router.patch(
   setParticipantMuteController,
 );
 
-// Host/Admin: Remove Participant
+// Current WatchSpace Host/Admin: Remove Participant
 router.delete(
   "/:watchSpaceId/participants/:participantId",
   authenticate,
-  authorizeRoles("host", "admin"),
+  authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
 
@@ -122,11 +124,11 @@ router.delete(
   removeParticipantController,
 );
 
-// Host/Admin: Lock or Unlock WatchSpace
+// Current WatchSpace Host/Admin: Lock or Unlock WatchSpace
 router.patch(
   "/:watchSpaceId/lock",
   authenticate,
-  authorizeRoles("host", "admin"),
+  authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
 
@@ -138,11 +140,11 @@ router.patch(
   setWatchSpaceLockController,
 );
 
-// Host/Admin: Transfer WatchSpace Host
+// Current WatchSpace Host/Admin: Transfer WatchSpace Host
 router.patch(
   "/:watchSpaceId/transfer-host",
   authenticate,
-  authorizeRoles("host", "admin"),
+  authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
 
