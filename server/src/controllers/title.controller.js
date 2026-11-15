@@ -120,6 +120,8 @@ export const getTitleByIdController = async (req, res) => {
 };
 
 // Update title
+
+// Update title
 export const updateTitleController = async (req, res) => {
   try {
     const thumbnailFile = req.files?.thumbnail?.[0];
@@ -128,18 +130,23 @@ export const updateTitleController = async (req, res) => {
       ...req.body,
     };
 
-    // Parse genre from multipart/form-data
-    if (typeof updates.genre === "string") {
-      try {
+    // Parse JSON fields from multipart/form-data
+    try {
+      if (typeof updates.genre === "string") {
         updates.genre = JSON.parse(updates.genre);
-      } catch {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid genre JSON format",
-        });
       }
+
+      if (typeof updates.timeline === "string") {
+        updates.timeline = JSON.parse(updates.timeline);
+      }
+    } catch {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid JSON format in genre or timeline",
+      });
     }
 
+    // Attach thumbnail if uploaded
     if (thumbnailFile) {
       updates.thumbnailFile = thumbnailFile;
     }

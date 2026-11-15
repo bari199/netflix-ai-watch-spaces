@@ -32,7 +32,7 @@ export const createWatchSpace = async (
 
 export const getWatchSpaceById = async (watchSpaceId, userId) => {
   const watchSpace = await WatchSpace.findById(watchSpaceId)
-    .populate("title", "name description duration thumbnailKey")
+    .populate("title", "name description duration thumbnailKey timeline")
     .populate("host", "name avatar")
     .populate("participants.user", "name avatar");
 

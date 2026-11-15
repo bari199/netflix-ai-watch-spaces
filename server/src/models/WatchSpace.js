@@ -49,6 +49,90 @@ const playbackSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Individual participant vote
+const participantVoteSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    optionId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    votedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
+
+// Active narrative variation vote
+const activeVoteSchema = new mongoose.Schema(
+  {
+    variationId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    options: [
+      {
+        id: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        label: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        _id: false,
+      },
+    ],
+    status: {
+      type: String,
+      enum: ["open", "closed", "applied"],
+      default: "open",
+    },
+    durationSeconds: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    closesAt: {
+      type: Date,
+      required: true,
+    },
+    applyAtSeconds: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    votes: {
+      type: [participantVoteSchema],
+      default: [],
+    },
+    winningOptionId: {
+      type: String,
+      default: null,
+    },
+    appliedAt: {
+      type: Date,
+      default: null,
+    },
+    triggeredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
 const watchSpaceSchema = new mongoose.Schema(
   {
     title: {
@@ -83,6 +167,10 @@ const watchSpaceSchema = new mongoose.Schema(
     votingEnabled: {
       type: Boolean,
       default: true,
+    },
+    activeVote: {
+      type: activeVoteSchema,
+      default: null,
     },
     status: {
       type: String,

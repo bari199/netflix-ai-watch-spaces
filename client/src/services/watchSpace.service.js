@@ -7,6 +7,7 @@ export const getActiveWatchSpaces = async () => {
 };
 
 // Get WatchSpace details
+// Get WatchSpace details
 export const getWatchSpaceById = async (watchSpaceId) => {
   const response = await api.get(`/watch-spaces/${watchSpaceId}`);
   return response.data;

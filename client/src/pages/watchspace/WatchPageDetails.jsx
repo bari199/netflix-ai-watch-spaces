@@ -43,6 +43,17 @@ const WatchPageDetails = () => {
   const [connectionLatency, setConnectionLatency] = useState(null);
   const [connectionQuality, setConnectionQuality] = useState("checking");
   const [hostDisconnected, setHostDisconnected] = useState(false);
+
+  // Narrative variation voting
+  const [activeVote, setActiveVote] = useState(null);
+  const [selectedVariationId, setSelectedVariationId] = useState("");
+  const [selectedVoteOption, setSelectedVoteOption] = useState("");
+  const [voteDuration, setVoteDuration] = useState(30);
+  const [voteSecondsLeft, setVoteSecondsLeft] = useState(0);
+  const [voteResult, setVoteResult] = useState(null);
+  const [voteMessage, setVoteMessage] = useState("");
+  const [voteLoading, setVoteLoading] = useState(false);
+
   const videoRef = useRef(null);
   const socketRef = useRef(null);
   const applyingRemoteUpdateRef = useRef(false);
@@ -69,8 +80,10 @@ const WatchPageDetails = () => {
       setError("");
 
       const response = await getWatchSpaceById(watchSpaceId);
+      const fetchedWatchSpace = response?.watchSpace || null;
 
-      setWatchSpace(response?.watchSpace || null);
+      setWatchSpace(fetchedWatchSpace);
+      setActiveVote(fetchedWatchSpace?.activeVote || null);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load WatchSpace.");
     } finally {
@@ -225,6 +238,8 @@ const WatchPageDetails = () => {
     };
 
     // Remote Playback Update
+
+    // Remote Playback Update
     const handlePlaybackUpdate = async (data) => {
       if (!active || String(data?.watchSpaceId) !== String(watchSpaceId)) {
         return;
@@ -233,6 +248,32 @@ const WatchPageDetails = () => {
       const video = videoRef.current;
       const payload = data?.payload;
 
+      if (!payload) return;
+
+      // Update React playback state for BOTH Host and Viewer
+      setWatchSpace((previous) => {
+        if (!previous) return previous;
+
+        const playbackState = {
+          play: "playing",
+          pause: "paused",
+          seek: "seeking",
+          buffering: "buffering",
+        }[payload.state];
+
+        return {
+          ...previous,
+          playback: {
+            ...previous.playback,
+            ...(playbackState ? { state: playbackState } : {}),
+            ...(Number.isFinite(Number(payload.positionSeconds))
+              ? { positionSeconds: Number(payload.positionSeconds) }
+              : {}),
+          },
+        };
+      });
+
+      // Host disconnect notification
       if (payload.reason === "host_disconnected") {
         setHostDisconnected(true);
       } else if (
@@ -242,8 +283,10 @@ const WatchPageDetails = () => {
         setHostDisconnected(false);
       }
 
-      if (!video || !payload) return;
+      if (!video) return;
 
+      // Do not re-apply playback to the user who issued the command.
+      // Their local video is already playing or paused.
       if (payload.issuedBy && String(payload.issuedBy) === currentUserId) {
         return;
       }
@@ -403,6 +446,62 @@ const WatchPageDetails = () => {
       );
     };
 
+    // Narrative Variation Voting Events
+    const handleVoteOpen = (data) => {
+      if (!active || !data?.variationId) return;
+
+      setActiveVote({
+        variationId: data.variationId,
+        options: data.options || [],
+        status: "open",
+        closesAt: data.closesAt,
+      });
+      setSelectedVoteOption("");
+      setVoteResult(null);
+      setVoteMessage("A new group vote has started.");
+    };
+
+    const handleVoteResult = (data) => {
+      if (!active || !data?.variationId) return;
+
+      setActiveVote((previous) => {
+        if (!previous || previous.variationId !== data.variationId) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          status: "closed",
+          winningOptionId: data.winningOptionId,
+          voteCounts: data.voteCounts || {},
+          applyAtSeconds: data.applyAtSeconds,
+        };
+      });
+
+      setVoteResult(data);
+      setVoteMessage("Voting has ended. The group result is ready.");
+    };
+
+    const handleVariationApplied = (data) => {
+      if (!active || !data?.variationId) return;
+
+      setActiveVote((previous) => {
+        if (!previous || previous.variationId !== data.variationId) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          status: "applied",
+          winningOptionId: data.winningOptionId,
+          appliedAt: data.appliedAt,
+          applyAtSeconds: data.applyAtSeconds,
+        };
+      });
+
+      setVoteMessage("The selected variation has been applied.");
+    };
+
     // Register Socket Events
     socket.on("connect", joinRoom);
     socket.on("disconnect", handleDisconnect);
@@ -419,6 +518,9 @@ const WatchPageDetails = () => {
     socket.on("chat.typing.update", handleTypingUpdate);
 
     socket.on("chat.reaction.updated", handleReactionUpdated);
+    socket.on("room.variation.voteOpen", handleVoteOpen);
+    socket.on("room.variation.voteResult", handleVoteResult);
+    socket.on("room.variation.applied", handleVariationApplied);
 
     if (socket.connected) {
       joinRoom();
@@ -477,6 +579,9 @@ const WatchPageDetails = () => {
       socket.off("chat.typing.update", handleTypingUpdate);
 
       socket.off("chat.reaction.updated", handleReactionUpdated);
+      socket.off("room.variation.voteOpen", handleVoteOpen);
+      socket.off("room.variation.voteResult", handleVoteResult);
+      socket.off("room.variation.applied", handleVariationApplied);
 
       if (roomJoined && socket.connected) {
         socket.emit("room.leave", { watchSpaceId });
@@ -496,6 +601,97 @@ const WatchPageDetails = () => {
     watchSpaceId,
     currentUserId,
   ]);
+
+  // Keep the vote countdown synchronized with the backend closesAt timestamp.
+  useEffect(() => {
+    if (!activeVote || activeVote.status !== "open" || !activeVote.closesAt) {
+      setVoteSecondsLeft(0);
+      return undefined;
+    }
+
+    const updateCountdown = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil(
+          (new Date(activeVote.closesAt).getTime() - Date.now()) / 1000,
+        ),
+      );
+      setVoteSecondsLeft(remaining);
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 500);
+
+    return () => clearInterval(timer);
+  }, [activeVote?.status, activeVote?.closesAt]);
+
+  // Host starts a vote using a pre-authored variation point from the Title timeline.
+  const handleStartVote = () => {
+    const socket = socketRef.current;
+
+    if (!socket?.connected || !selectedVariationId || voteLoading) {
+      setVoteMessage(
+        "Select a variation point and make sure you are connected.",
+      );
+      return;
+    }
+
+    setVoteLoading(true);
+    setVoteMessage("");
+
+    socket.emit(
+      "variation.vote.start",
+      {
+        watchSpaceId,
+        variationId: selectedVariationId,
+        durationSeconds: Number(voteDuration),
+      },
+      (response) => {
+        setVoteLoading(false);
+
+        if (!response?.success) {
+          setVoteMessage(response?.message || "Could not start the vote.");
+          return;
+        }
+
+        setVoteMessage("Vote started successfully.");
+      },
+    );
+  };
+
+  // Participants can cast or change their vote while the vote is open.
+  const handleCastVote = (optionId) => {
+    const socket = socketRef.current;
+
+    if (!socket?.connected || !activeVote || activeVote.status !== "open") {
+      setVoteMessage("There is no active vote.");
+      return;
+    }
+
+    setVoteLoading(true);
+    setVoteMessage("");
+
+    socket.emit(
+      "variation.vote.cast",
+      {
+        watchSpaceId,
+        optionId,
+      },
+      (response) => {
+        setVoteLoading(false);
+
+        if (!response?.success) {
+          setVoteMessage(
+            response?.message || "Your vote could not be recorded.",
+          );
+          return;
+        }
+
+        setSelectedVoteOption(optionId);
+        setVoteMessage("Your vote has been recorded.");
+      },
+    );
+  };
 
   // Host Playback Controls
   const emitPlaybackControl = useCallback(
@@ -774,6 +970,16 @@ const WatchPageDetails = () => {
 
   const currentPlaybackState = watchSpace.playback?.state || "paused";
 
+  const variationPoints = Array.isArray(title?.timeline)
+    ? title.timeline.filter(
+        (event) =>
+          event?.eventType === "variationPoint" &&
+          event?.variationId &&
+          Array.isArray(event?.options) &&
+          event.options.length >= 2,
+      )
+    : [];
+
   return (
     <div className="min-h-screen bg-[#141414] text-white">
       {/* Header */}
@@ -1001,6 +1207,198 @@ const WatchPageDetails = () => {
             >
               {watchSpace.isLocked ? "Unlock Room" : "Lock Room"}
             </button>
+          </section>
+        )}
+
+        {/* Narrative Variation Voting */}
+        {isParticipant && !isEnded && watchSpace.votingEnabled && (
+          <section className="rounded-xl border border-white/10 bg-[#181818] p-6">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Group Story Vote</h2>
+                <p className="mt-1 text-sm text-gray-400">
+                  Choose between pre-approved story variations.
+                </p>
+              </div>
+
+              {activeVote?.status === "open" && (
+                <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
+                  Voting open · {voteSecondsLeft}s left
+                </span>
+              )}
+              {activeVote?.status === "closed" && (
+                <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-300">
+                  Vote closed
+                </span>
+              )}
+              {activeVote?.status === "applied" && (
+                <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-300">
+                  Variation applied
+                </span>
+              )}
+            </div>
+            {isHost &&
+              !activeVote?.status?.match(/open/) &&
+              variationPoints.length > 0 && (
+                <div className="mb-6 rounded-lg border border-white/10 bg-[#202020] p-4">
+                  <h3 className="mb-3 font-medium">Start a group vote</h3>
+
+                  <div className="grid gap-3 sm:grid-cols-[1fr_150px_auto]">
+                    <select
+                      value={selectedVariationId}
+                      onChange={(event) =>
+                        setSelectedVariationId(event.target.value)
+                      }
+                      className="min-w-0 rounded-lg border border-white/10 bg-[#141414] px-3 py-3 text-sm text-white outline-none focus:border-red-500"
+                    >
+                      <option value="">Select a story variation</option>
+                      {variationPoints.map((point) => (
+                        <option
+                          key={point.variationId}
+                          value={point.variationId}
+                        >
+                          {point.description || point.variationId}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={voteDuration}
+                      onChange={(event) =>
+                        setVoteDuration(Number(event.target.value))
+                      }
+                      className="rounded-lg border border-white/10 bg-[#141414] px-3 py-3 text-sm text-white outline-none focus:border-red-500"
+                    >
+                      <option value={15}>15 seconds</option>
+                      <option value={30}>30 seconds</option>
+                      <option value={45}>45 seconds</option>
+                      <option value={60}>60 seconds</option>
+                      <option value={90}>90 seconds</option>
+                      <option value={120}>120 seconds</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleStartVote}
+                      disabled={
+                        voteLoading ||
+                        !selectedVariationId ||
+                        activeVote?.status === "open"
+                      }
+                      className="rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {voteLoading ? "Please wait..." : "Start Vote"}
+                    </button>
+                  </div>
+
+                  {variationPoints.length === 0 && (
+                    <p className="mt-2 text-sm text-gray-400">
+                      No pre-authored variation points are available for this
+                      title.
+                    </p>
+                  )}
+                </div>
+              )}
+            {activeVote?.options?.length > 0 ? (
+              <>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-400">
+                      Variation:{" "}
+                      <span className="font-medium text-white">
+                        {variationPoints
+                          .find(
+                            (point) =>
+                              String(point.variationId) ===
+                              String(activeVote.variationId),
+                          )
+                          ?.description?.trim() || "Story variation"}
+                      </span>
+                    </p>
+
+                    {activeVote.status === "open" && (
+                      <p className="mt-1 text-sm text-gray-400">
+                        Select an option below. You can change your vote before
+                        time runs out.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {activeVote.options.map((option) => {
+                    const isSelected = selectedVoteOption === option.id;
+                    const isWinner = activeVote.winningOptionId === option.id;
+                    const voteCount = activeVote.voteCounts?.[option.id];
+
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleCastVote(option.id)}
+                        disabled={
+                          activeVote.status !== "open" ||
+                          voteLoading ||
+                          !isParticipant
+                        }
+                        className={`rounded-lg border p-4 text-left transition disabled:cursor-not-allowed ${
+                          isSelected
+                            ? "border-red-500 bg-red-500/10"
+                            : isWinner
+                              ? "border-green-500 bg-green-500/10"
+                              : "border-white/10 bg-[#202020] hover:border-white/30"
+                        }`}
+                      >
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{option.label}</span>
+                          {isSelected && (
+                            <span className="text-xs text-red-400">
+                              Your vote
+                            </span>
+                          )}
+                          {isWinner && (
+                            <span className="text-xs text-green-400">
+                              Winner
+                            </span>
+                          )}
+                        </span>
+                        {activeVote.status !== "open" && (
+                          <span className="mt-2 block text-xs text-gray-400">
+                            {voteCount ?? 0} vote(s)
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-400">
+                No active group vote. The Host can start one when a variation
+                point is available.
+              </p>
+            )}
+            {voteMessage && (
+              <p className="mt-4 text-sm text-gray-300" role="status">
+                {voteMessage}
+              </p>
+            )}
+            {voteResult?.winningOptionId && (
+              <p className="mt-3 text-sm text-green-400">
+                Winning option:{" "}
+                {activeVote?.options?.find(
+                  (option) => option.id === voteResult.winningOptionId,
+                )?.label || voteResult.winningOptionId}
+                {Number.isFinite(Number(voteResult.applyAtSeconds)) &&
+                  ` · Scheduled point: ${Math.floor(voteResult.applyAtSeconds)}s`}
+              </p>
+            )}
+            {activeVote?.status === "applied" && (
+              <p className="mt-2 text-sm text-blue-300">
+                The selected variation has been marked as applied for this
+                WatchSpace.
+              </p>
+            )}
           </section>
         )}
 

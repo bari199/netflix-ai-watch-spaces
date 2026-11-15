@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/axios.js";
+import VariationTimelineEditor, {
+  validateVariationTimeline,
+} from "../../components/admin/VariationTimelineEditor.jsx";
 
 const EditTitlePage = () => {
   const { titleId } = useParams();
@@ -15,70 +18,94 @@ const EditTitlePage = () => {
     isPublished: false,
   });
 
+  const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  // Thumbnail states
   const [thumbnail, setThumbnail] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState("");
 
-  // Fetch existing title
   useEffect(() => {
+    let isMounted = true;
+
     const fetchTitle = async () => {
       try {
         setLoading(true);
         setError("");
 
         const response = await api.get(`/titles/${titleId}`);
-        const title = response.data.title;
+        const title = response.data?.title;
 
-        // Load existing thumbnail
-        if (title.thumbnailKey) {
-          setThumbnailPreview(
-            `${import.meta.env.VITE_API_BASE_URL}/titles/${titleId}/thumbnail`,
-          );
+        if (!title) {
+          throw new Error("Title data was not returned by the server.");
         }
+
+        if (!isMounted) return;
 
         setFormData({
           name: title.name || "",
           description: title.description || "",
-          genre: title.genre?.join(", ") || "",
-          releaseYear: title.releaseYear || "",
-          duration: title.duration || "",
+          genre: Array.isArray(title.genre) ? title.genre.join(", ") : "",
+          releaseYear: title.releaseYear ?? "",
+          duration: title.duration ?? "",
           isPublished: Boolean(title.isPublished),
         });
+
+        setTimeline(Array.isArray(title.timeline) ? title.timeline : []);
+
+        if (title.thumbnailKey) {
+          setThumbnailPreview(
+            `${import.meta.env.VITE_API_BASE_URL}/titles/${titleId}/thumbnail`,
+          );
+        } else {
+          setThumbnailPreview("");
+        }
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to load title.");
+        if (isMounted) {
+          setError(
+            err.response?.data?.message ||
+              err.message ||
+              "Failed to load title.",
+          );
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchTitle();
+
+    return () => {
+      isMounted = false;
+    };
   }, [titleId]);
 
-  // Handle form input changes
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  useEffect(() => {
+    return () => {
+      if (thumbnailPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(thumbnailPreview);
+      }
+    };
+  }, [thumbnailPreview]);
 
-    setFormData((prev) => ({
-      ...prev,
+  const handleChange = (event) => {
+    const { name, value, type, checked } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  // Handle thumbnail selection
-  const handleThumbnailChange = (e) => {
-    const file = e.target.files?.[0];
-
+  const handleThumbnailChange = (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
     if (!allowedTypes.includes(file.type)) {
       setError("Thumbnail must be JPEG, PNG or WEBP.");
-      e.target.value = "";
+      event.target.value = "";
       return;
     }
 
@@ -91,18 +118,39 @@ const EditTitlePage = () => {
       if (previous.startsWith("blob:")) {
         URL.revokeObjectURL(previous);
       }
-
       return previewUrl;
     });
   };
 
-  // Submit updated title
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (saving) return;
+
+    setError("");
+
+    if (!formData.name.trim()) {
+      setError("Title name is required.");
+      return;
+    }
+
+    if (!formData.duration || Number(formData.duration) <= 0) {
+      setError("Enter a valid duration in seconds.");
+      return;
+    }
+
+    const timelineError = validateVariationTimeline(
+      timeline,
+      formData.duration,
+    );
+
+    if (timelineError) {
+      setError(timelineError);
+      return;
+    }
 
     try {
       setSaving(true);
-      setError("");
 
       const payload = {
         name: formData.name.trim(),
@@ -118,7 +166,25 @@ const EditTitlePage = () => {
         isPublished: formData.isPublished,
       };
 
-      // Create FormData
+      const normalizedTimeline = timeline.map((item) => {
+        if (item?.eventType !== "variationPoint") return item;
+
+        return {
+          ...item,
+          eventId: item.eventId,
+          eventType: "variationPoint",
+          startTime: Number(item.startTime),
+          endTime: Number(item.endTime),
+          description: String(item.description || "").trim(),
+          variationId: String(item.variationId || "").trim(),
+          options: (item.options || []).map((option) => ({
+            ...option,
+            id: String(option.id || "").trim(),
+            label: String(option.label || "").trim(),
+          })),
+        };
+      });
+
       const data = new FormData();
 
       Object.entries(payload).forEach(([key, value]) => {
@@ -130,16 +196,15 @@ const EditTitlePage = () => {
         }
       });
 
-      // Append new thumbnail if selected
+      data.append("timeline", JSON.stringify(normalizedTimeline));
+
       if (thumbnail) {
         data.append("thumbnail", thumbnail);
       }
 
-      // Update title
       await api.patch(`/titles/${titleId}`, data);
 
-      // Navigate after successful update
-      navigate("/admin/titles");
+      navigate("/admin/titles", { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update title.");
     } finally {
@@ -151,18 +216,23 @@ const EditTitlePage = () => {
     return <p className="py-10 text-center text-gray-400">Loading title...</p>;
   }
 
+  const inputClass =
+    "w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-sm text-white outline-none focus:border-red-500";
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Edit Title</h1>
-
         <p className="mt-2 text-sm text-gray-400">
-          Update your movie or video information.
+          Update title information and configure interactive variation points.
         </p>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-400">
+        <div
+          role="alert"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400"
+        >
           {error}
         </div>
       )}
@@ -171,34 +241,29 @@ const EditTitlePage = () => {
         onSubmit={handleSubmit}
         className="space-y-5 rounded-xl border border-white/10 bg-[#1f1f1f] p-6"
       >
-        {/* Title Name */}
         <div>
-          <label className="mb-2 block text-sm font-medium">Title Name</label>
-
+          <label className="mb-2 block text-sm font-medium">Title Name *</label>
           <input
             type="text"
             name="name"
             value={formData.name}
             onChange={handleChange}
             required
-            className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 outline-none focus:border-red-500"
+            className={inputClass}
           />
         </div>
 
-        {/* Description */}
         <div>
           <label className="mb-2 block text-sm font-medium">Description</label>
-
           <textarea
             name="description"
             value={formData.description}
             onChange={handleChange}
-            rows="4"
-            className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 outline-none focus:border-red-500"
+            rows={4}
+            className={inputClass}
           />
         </div>
 
-        {/* Thumbnail Preview and Replace */}
         <div>
           <label className="mb-2 block text-sm font-medium">
             Thumbnail Image
@@ -220,45 +285,42 @@ const EditTitlePage = () => {
           />
 
           <p className="mt-2 text-xs text-gray-500">
-            Select a new image to replace the existing thumbnail.
+            Select a new image only if you want to replace the current
+            thumbnail.
           </p>
         </div>
 
-        {/* Genres */}
         <div>
           <label className="mb-2 block text-sm font-medium">Genres</label>
-
           <input
             type="text"
             name="genre"
             value={formData.genre}
             onChange={handleChange}
             placeholder="Action, Sci-Fi, Adventure"
-            className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 outline-none focus:border-red-500"
+            className={inputClass}
           />
         </div>
 
-        {/* Release Year and Duration */}
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium">
               Release Year
             </label>
-
             <input
               type="number"
               name="releaseYear"
               value={formData.releaseYear}
               onChange={handleChange}
-              className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 outline-none focus:border-red-500"
+              min="1888"
+              className={inputClass}
             />
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium">
-              Duration (seconds)
+              Duration (seconds) *
             </label>
-
             <input
               type="number"
               name="duration"
@@ -266,12 +328,17 @@ const EditTitlePage = () => {
               onChange={handleChange}
               min="1"
               required
-              className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 outline-none focus:border-red-500"
+              className={inputClass}
             />
           </div>
         </div>
 
-        {/* Publish Status */}
+        <VariationTimelineEditor
+          timeline={timeline}
+          onChange={setTimeline}
+          duration={formData.duration}
+        />
+
         <label className="flex items-center gap-3 text-sm">
           <input
             type="checkbox"
@@ -283,12 +350,11 @@ const EditTitlePage = () => {
           Publish this title
         </label>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3 pt-3">
+        <div className="flex flex-wrap gap-3 border-t border-white/10 pt-5">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-red-600 px-6 py-3 text-sm font-semibold hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-red-600 px-6 py-3 text-sm font-semibold transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save Changes"}
           </button>
@@ -296,7 +362,8 @@ const EditTitlePage = () => {
           <button
             type="button"
             onClick={() => navigate("/admin/titles")}
-            className="rounded-lg border border-white/20 px-6 py-3 text-sm font-semibold hover:bg-white/10"
+            disabled={saving}
+            className="rounded-lg border border-white/20 px-6 py-3 text-sm font-semibold transition hover:bg-white/10 disabled:opacity-50"
           >
             Cancel
           </button>

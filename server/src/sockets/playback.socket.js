@@ -8,6 +8,60 @@ const HOST_POSITION_MAX_AGE_MS = 2000;
 // Stores the latest authoritative host position per WatchSpace
 const hostPlaybackPositions = new Map();
 
+const applyDueVariation = async (
+  io,
+  watchSpaceId,
+  previousPosition,
+  currentPosition,
+  playbackState,
+) => {
+  try {
+    if (playbackState !== "playing") return;
+
+    if (previousPosition === null || previousPosition === undefined) return;
+
+    if (currentPosition <= previousPosition) return;
+
+    const watchSpace = await WatchSpace.findOneAndUpdate(
+      {
+        _id: watchSpaceId,
+        "activeVote.status": "closed",
+        "activeVote.appliedAt": null,
+        $expr: {
+          $and: [
+            { $gt: ["$activeVote.applyAtSeconds", previousPosition] },
+            { $lte: ["$activeVote.applyAtSeconds", currentPosition] },
+          ],
+        },
+      },
+      {
+        $set: {
+          "activeVote.status": "applied",
+          "activeVote.appliedAt": new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    if (!watchSpace) return;
+
+    const vote = watchSpace.activeVote;
+
+    io.to(`watchspace:${watchSpaceId}`).emit("room.variation.applied", {
+      variationId: vote.variationId,
+      winningOptionId: vote.winningOptionId,
+      applyAtSeconds: vote.applyAtSeconds,
+      appliedAt: vote.appliedAt,
+    });
+
+    console.log(
+      `Variation applied: ${vote.variationId} in WatchSpace ${watchSpaceId}`,
+    );
+  } catch (error) {
+    console.error("Variation application error:", error);
+  }
+};
+
 const registerPlaybackHandlers = (io, socket) => {
   socket.on("playback.control", async (data, callback) => {
     try {
@@ -57,8 +111,14 @@ const registerPlaybackHandlers = (io, socket) => {
       }
 
       // Update authoritative playback state
+      // Update authoritative playback state
       if (action === "play") {
         watchSpace.playback.state = "playing";
+
+        // Activate WatchSpace when Host starts playback
+        if (watchSpace.status === "waiting") {
+          watchSpace.status = "active";
+        }
       } else if (action === "pause") {
         watchSpace.playback.state = "paused";
       } else if (action === "seek") {
@@ -217,6 +277,27 @@ const registerPlaybackHandlers = (io, socket) => {
 
       // Only the Host can update the authoritative playback position
       if (isHost) {
+        hostPlaybackPositions.set(watchSpaceId.toString(), {
+          positionSeconds,
+          receivedAt,
+          state: watchSpace.playback.state,
+        });
+      }
+
+      // Only the Host can update the authoritative playback position
+      if (isHost) {
+        const previousHostPosition = hostPlaybackPositions.get(
+          watchSpaceId.toString(),
+        );
+
+        await applyDueVariation(
+          io,
+          watchSpaceId.toString(),
+          previousHostPosition?.positionSeconds ?? null,
+          positionSeconds,
+          watchSpace.playback.state,
+        );
+
         hostPlaybackPositions.set(watchSpaceId.toString(), {
           positionSeconds,
           receivedAt,
