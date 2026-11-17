@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
   const API_BASE_URL =
@@ -41,7 +42,15 @@ function LoginPage() {
 
     try {
       await login(formData);
-      navigate("/");
+
+      const redirectTo = location.state?.from;
+
+      navigate(
+        redirectTo?.pathname
+          ? `${redirectTo.pathname}${redirectTo.search || ""}`
+          : "/",
+        { replace: true },
+      );
     } catch (error) {
       setError(
         error.response?.data?.message || "Login failed. Please try again.",

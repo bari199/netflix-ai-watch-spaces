@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 import {
@@ -29,13 +29,15 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "👏"];
 
 const WatchPageDetails = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { watchSpaceId } = useParams();
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [watchSpace, setWatchSpace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [copiedInviteCode, setCopiedInviteCode] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const [chatMessages, setChatMessages] = useState([]);
@@ -73,6 +75,9 @@ const WatchPageDetails = () => {
   const qualityIntervalRef = useRef(null);
   const fetchRequestIdRef = useRef(0);
 
+  const inviteJoinAttemptRef = useRef("");
+  const inviteCode = new URLSearchParams(location.search).get("inviteCode");
+  const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const currentUserId = String(user?._id || user?.id || "");
 
   const getUserId = (value) => {
@@ -149,12 +154,66 @@ const WatchPageDetails = () => {
 
   useEffect(() => {
     if (!user) {
-      navigate("/login", { replace: true });
+      navigate("/login", {
+        replace: true,
+        state: {
+          from: {
+            pathname: location.pathname,
+            search: location.search,
+          },
+        },
+      });
       return;
     }
 
+    // Redeem a private-room invite before fetching details. A visitor who is
+    // not yet a participant may not be allowed to read private room details.
+    if (inviteCode) {
+      const attemptKey = `${watchSpaceId}:${inviteCode}`;
+
+      // Prevent duplicate join requests (including React StrictMode effect replay).
+      if (inviteJoinAttemptRef.current === attemptKey) {
+        return;
+      }
+
+      inviteJoinAttemptRef.current = attemptKey;
+
+      const redeemInvite = async () => {
+        try {
+          setLoading(true);
+          setError("");
+
+          await joinWatchSpace(watchSpaceId, inviteCode);
+
+          // Removing the query triggers this effect again; it will then load
+          // the now-accessible WatchSpace details.
+          navigate(`/watch-spaces/${watchSpaceId}`, { replace: true });
+        } catch (err) {
+          setError(
+            err?.response?.data?.message ||
+              "Failed to join with this invite link.",
+          );
+          setWatchSpace(null);
+          setLoading(false);
+        }
+      };
+
+      redeemInvite();
+      return;
+    }
+
+    // The invite query has been removed; allow a later invite visit.
+    inviteJoinAttemptRef.current = "";
     fetchWatchSpace();
-  }, [user, navigate, fetchWatchSpace]);
+  }, [
+    user,
+    navigate,
+    location.pathname,
+    location.search,
+    inviteCode,
+    watchSpaceId,
+    fetchWatchSpace,
+  ]);
 
   const participants = watchSpace?.participants || [];
 
@@ -167,6 +226,7 @@ const WatchPageDetails = () => {
   );
 
   const isEnded = watchSpace?.status === "ended";
+
   const title = watchSpace?.title;
   const titleId = getUserId(title);
   const playbackPosition = Number(watchSpace?.playback?.positionSeconds) || 0;
@@ -1095,6 +1155,44 @@ const WatchPageDetails = () => {
     }
   };
 
+  const handleCopyInviteCode = async () => {
+    if (!watchSpace?.inviteCode) return;
+
+    try {
+      await navigator.clipboard.writeText(watchSpace.inviteCode);
+      setCopiedInviteCode(true);
+
+      setTimeout(() => {
+        setCopiedInviteCode(false);
+      }, 2000);
+    } catch {
+      setError("Failed to copy invite code.");
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!watchSpace?.isPrivate || !watchSpace?.inviteCode) return;
+
+    const inviteLink = new URL(
+      `/watch-spaces/${watchSpaceId}`,
+      window.location.origin,
+    );
+
+    inviteLink.searchParams.set("inviteCode", watchSpace.inviteCode);
+
+    try {
+      await navigator.clipboard.writeText(inviteLink.toString());
+
+      setCopiedInviteLink(true);
+
+      setTimeout(() => {
+        setCopiedInviteLink(false);
+      }, 2000);
+    } catch {
+      setError("Failed to copy invite link.");
+    }
+  };
+
   const handleJoin = async () => {
     await handleAction(() => joinWatchSpace(watchSpaceId));
   };
@@ -1434,9 +1532,45 @@ const WatchPageDetails = () => {
               <p className="text-sm text-gray-400">Room Privacy</p>
 
               <p className="mt-1 font-medium">
-                {watchSpace.isLocked ? "Private / Locked" : "Public"}
+                {watchSpace.isPrivate ? "Private" : "Public"}
+                {watchSpace.isLocked ? " · Locked" : ""}
               </p>
             </div>
+
+            {/* Private WatchSpace Invite Code - Host Only */}
+            {isHost && watchSpace.isPrivate && watchSpace.inviteCode && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+                <p className="text-sm font-medium text-gray-300">Invite Code</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <code className="min-w-0 flex-1 break-all rounded bg-black/40 px-3 py-2 text-lg font-bold tracking-wider text-red-400">
+                    {watchSpace.inviteCode}
+                  </code>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteCode}
+                    className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700"
+                  >
+                    {copiedInviteCode ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyInviteLink}
+                  className="mt-3 w-full rounded-lg border border-red-500/40 bg-red-600/10 px-4 py-2.5 text-sm font-semibold text-red-400 transition hover:bg-red-600/20"
+                >
+                  {copiedInviteLink
+                    ? "Invite Link Copied!"
+                    : "Copy Invite Link"}
+                </button>
+
+                <p className="mt-2 text-xs text-gray-500">
+                  Share this code only with people you want to invite.
+                </p>
+              </div>
+            )}
 
             <div>
               <p className="text-sm text-gray-400">Playback</p>

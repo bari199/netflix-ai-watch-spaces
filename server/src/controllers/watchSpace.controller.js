@@ -133,6 +133,8 @@ export const getActiveWatchSpacesController = async (req, res) => {
 };
 
 // Get WatchSpace Details
+
+// Get WatchSpace Details
 export const getWatchSpaceByIdController = async (req, res) => {
   try {
     const watchSpace = await getWatchSpaceById(
@@ -141,7 +143,12 @@ export const getWatchSpaceByIdController = async (req, res) => {
     );
 
     const watchSpaceData = watchSpace.toObject();
-    watchSpaceData.inviteCode = null;
+
+    // Only the host can retrieve a private WatchSpace invite code.
+    const isHost = watchSpace.host?._id?.toString() === req.user._id.toString();
+
+    watchSpaceData.inviteCode =
+      watchSpace.isPrivate && isHost ? watchSpace.inviteCode : null;
 
     return res.status(200).json({
       success: true,
