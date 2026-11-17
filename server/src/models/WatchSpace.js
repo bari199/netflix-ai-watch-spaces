@@ -164,6 +164,14 @@ const watchSpaceSchema = new mongoose.Schema(
       enum: ["minimal", "normal", "chatty"],
       default: "normal",
     },
+    triviaEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    triggeredTriviaEventIds: {
+      type: [String],
+      default: [],
+    },
     votingEnabled: {
       type: Boolean,
       default: true,

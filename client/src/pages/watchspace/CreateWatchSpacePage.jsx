@@ -19,6 +19,7 @@ const CreateWatchSpacePage = () => {
     isPrivate: false,
     maxParticipants: 25,
     aiVerbosity: "normal",
+    triviaEnabled: true,
     votingEnabled: false,
   });
 
@@ -273,6 +274,28 @@ const CreateWatchSpacePage = () => {
 
               <p className="mt-2 pl-7 text-xs text-gray-500">
                 Private WatchSpaces require an invite code to join.
+              </p>
+            </div>
+
+            {/* Trivia */}
+            <div className="rounded-lg border border-white/10 bg-[#202020] p-4">
+              <label className="flex cursor-pointer items-center gap-3">
+                <input
+                  type="checkbox"
+                  name="triviaEnabled"
+                  checked={formData.triviaEnabled}
+                  onChange={handleChange}
+                  className="h-4 w-4 accent-red-600"
+                />
+
+                <span className="text-sm font-medium text-gray-200">
+                  Enable timeline trivia cards
+                </span>
+              </label>
+
+              <p className="mt-2 pl-7 text-xs text-gray-500">
+                Display authored trivia moments when playback reaches the marked
+                timestamp.
               </p>
             </div>
 

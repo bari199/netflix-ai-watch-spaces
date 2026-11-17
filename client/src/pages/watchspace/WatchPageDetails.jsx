@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 import {
+  askWatchSpaceAI,
   getWatchSpaceById,
   joinWatchSpace,
   leaveWatchSpace,
@@ -38,6 +39,10 @@ const WatchPageDetails = () => {
   const [typingUsers, setTypingUsers] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiResponse, setAiResponse] = useState(null);
+  const [aiError, setAiError] = useState(null);
+  const [isAskingAI, setIsAskingAI] = useState(false);
 
   const [onlineParticipants, setOnlineParticipants] = useState([]);
   const [connectionLatency, setConnectionLatency] = useState(null);
@@ -53,9 +58,13 @@ const WatchPageDetails = () => {
   const [voteResult, setVoteResult] = useState(null);
   const [voteMessage, setVoteMessage] = useState("");
   const [voteLoading, setVoteLoading] = useState(false);
+  const [triviaCards, setTriviaCards] = useState([]);
+  const [subtitleSelection, setSubtitleSelection] = useState(null);
 
   const videoRef = useRef(null);
   const socketRef = useRef(null);
+  const aiSubmittingRef = useRef(false);
+  const seenTriviaEventIdsRef = useRef(new Set());
   const applyingRemoteUpdateRef = useRef(false);
   const chatMessagesEndRef = useRef(null);
   const qualityIntervalRef = useRef(null);
@@ -111,6 +120,78 @@ const WatchPageDetails = () => {
   );
 
   const isEnded = watchSpace?.status === "ended";
+  const title = watchSpace?.title;
+  const titleId = getUserId(title);
+  const playbackPosition = Number(watchSpace?.playback?.positionSeconds) || 0;
+  const activeTimelineEvent = (title?.timeline || [])
+    .filter(
+      (event) =>
+        Number(event.startTime) <= playbackPosition &&
+        Number(event.endTime) >= playbackPosition,
+    )
+    .sort(
+      (first, second) => Number(second.startTime) - Number(first.startTime),
+    )[0];
+  const subtitleVariants = (title?.subtitleVariants || []).filter(
+    (variant) =>
+      (!variant.eventId || activeTimelineEvent?.eventId === variant.eventId) &&
+      (!variant.variationId ||
+        (activeVote?.status === "applied" &&
+          activeVote.variationId === variant.variationId &&
+          activeVote.winningOptionId === variant.optionId)),
+  );
+  const browserLocale =
+    typeof navigator !== "undefined" ? navigator.language : "";
+  const preferredSubtitle =
+    subtitleVariants.find(
+      (variant) => variant.locale.toLowerCase() === browserLocale.toLowerCase(),
+    ) ||
+    subtitleVariants.find(
+      (variant) =>
+        variant.locale.split("-")[0].toLowerCase() ===
+        browserLocale.split("-")[0].toLowerCase(),
+    ) ||
+    subtitleVariants[0];
+  const selectedSubtitleId =
+    subtitleSelection?.watchSpaceId === watchSpaceId
+      ? subtitleSelection.variantId
+      : null;
+  const selectedSubtitle =
+    selectedSubtitleId === "off"
+      ? null
+      : subtitleVariants.find(
+          (variant) => variant.variantId === selectedSubtitleId,
+        ) || preferredSubtitle;
+  const currentAiResponse =
+    aiResponse?.watchSpaceId === watchSpaceId ? aiResponse : null;
+  const currentAiError =
+    aiError?.watchSpaceId === watchSpaceId ? aiError.message : "";
+  const aiSourceEvents = (
+    Array.isArray(currentAiResponse?.sourceEvents)
+      ? currentAiResponse.sourceEvents
+      : []
+  ).map((eventId) => ({
+    eventId,
+    timelineEvent: (title?.timeline || []).find(
+      (event) => String(event?.eventId) === String(eventId),
+    ),
+  }));
+
+  useEffect(() => {
+    seenTriviaEventIdsRef.current.clear();
+  }, [watchSpaceId]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    Array.from(video.textTracks).forEach((track, index) => {
+      track.mode =
+        subtitleVariants[index]?.variantId === selectedSubtitle?.variantId
+          ? "showing"
+          : "disabled";
+    });
+  }, [subtitleVariants, selectedSubtitle?.variantId]);
 
   useEffect(() => {
     chatMessagesEndRef.current?.scrollIntoView({
@@ -322,6 +403,28 @@ const WatchPageDetails = () => {
       }
     };
 
+    const handleAuthoritativePosition = (data) => {
+      if (!active || String(data?.watchSpaceId) !== String(watchSpaceId)) {
+        return;
+      }
+
+      if (!Number.isFinite(data?.positionSeconds) || data.positionSeconds < 0) {
+        return;
+      }
+
+      setWatchSpace((previous) =>
+        previous
+          ? {
+              ...previous,
+              playback: {
+                ...previous.playback,
+                positionSeconds: data.positionSeconds,
+              },
+            }
+          : previous,
+      );
+    };
+
     // Playback Drift Correction
     const handleSyncCorrection = (data) => {
       if (!active || String(data?.watchSpaceId) !== String(watchSpaceId)) {
@@ -502,12 +605,30 @@ const WatchPageDetails = () => {
       setVoteMessage("The selected variation has been applied.");
     };
 
+    const handleTriviaEvent = (data) => {
+      if (!active || !data?.eventId || !data?.text) return;
+      if (seenTriviaEventIdsRef.current.has(data.eventId)) return;
+
+      seenTriviaEventIdsRef.current.add(data.eventId);
+      setTriviaCards((previous) => [
+        ...previous,
+        {
+          watchSpaceId,
+          eventId: data.eventId,
+          text: data.text,
+          startTime: data.startTime,
+          endTime: data.endTime,
+        },
+      ]);
+    };
+
     // Register Socket Events
     socket.on("connect", joinRoom);
     socket.on("disconnect", handleDisconnect);
     socket.on("connect_error", handleConnectError);
 
     socket.on("room.playback.update", handlePlaybackUpdate);
+    socket.on("room.playback.position", handleAuthoritativePosition);
 
     socket.on("room.sync.correction", handleSyncCorrection);
 
@@ -518,6 +639,7 @@ const WatchPageDetails = () => {
     socket.on("chat.typing.update", handleTypingUpdate);
 
     socket.on("chat.reaction.updated", handleReactionUpdated);
+    socket.on("room.ai.trivia", handleTriviaEvent);
     socket.on("room.variation.voteOpen", handleVoteOpen);
     socket.on("room.variation.voteResult", handleVoteResult);
     socket.on("room.variation.applied", handleVariationApplied);
@@ -569,6 +691,7 @@ const WatchPageDetails = () => {
       socket.off("connect_error", handleConnectError);
 
       socket.off("room.playback.update", handlePlaybackUpdate);
+      socket.off("room.playback.position", handleAuthoritativePosition);
 
       socket.off("room.sync.correction", handleSyncCorrection);
 
@@ -579,6 +702,7 @@ const WatchPageDetails = () => {
       socket.off("chat.typing.update", handleTypingUpdate);
 
       socket.off("chat.reaction.updated", handleReactionUpdated);
+      socket.off("room.ai.trivia", handleTriviaEvent);
       socket.off("room.variation.voteOpen", handleVoteOpen);
       socket.off("room.variation.voteResult", handleVoteResult);
       socket.off("room.variation.applied", handleVariationApplied);
@@ -793,6 +917,53 @@ const WatchPageDetails = () => {
     );
   };
 
+  const handleAskAI = async (event) => {
+    event.preventDefault();
+
+    const question = aiQuestion.trim();
+    if (
+      !question ||
+      !watchSpaceId ||
+      aiSubmittingRef.current ||
+      (!isHost && !isParticipant) ||
+      isEnded
+    ) {
+      return;
+    }
+
+    aiSubmittingRef.current = true;
+    setIsAskingAI(true);
+    setAiError(null);
+    setAiResponse(null);
+
+    try {
+      const response = await askWatchSpaceAI(watchSpaceId, question);
+      if (typeof response?.answer !== "string") {
+        throw new Error("The AI response was incomplete. Please try again.");
+      }
+
+      setAiResponse({
+        watchSpaceId,
+        answer: response.answer,
+        sourceEvents: Array.isArray(response.sourceEvents)
+          ? response.sourceEvents
+          : [],
+      });
+      setAiQuestion("");
+    } catch (requestError) {
+      setAiError({
+        watchSpaceId,
+        message:
+          requestError?.response?.data?.message ||
+          requestError?.message ||
+          "The AI Co-Pilot is unavailable right now. Please try again.",
+      });
+    } finally {
+      aiSubmittingRef.current = false;
+      setIsAskingAI(false);
+    }
+  };
+
   // Emoji Reaction
   const handleChatReaction = (messageId, emoji) => {
     const socket = socketRef.current;
@@ -956,9 +1127,6 @@ const WatchPageDetails = () => {
   }
 
   // Movie Information
-  const title = watchSpace.title;
-  const titleId = getUserId(title);
-
   const thumbnailUrl = title?.thumbnailKey
     ? `${API_BASE_URL}/titles/${titleId}/thumbnail`
     : undefined;
@@ -1009,6 +1177,37 @@ const WatchPageDetails = () => {
           </div>
         )}
 
+        {triviaCards
+          .filter((card) => card.watchSpaceId === watchSpaceId)
+          .map((triviaCard) => (
+            <div
+              key={triviaCard.eventId}
+              className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100"
+            >
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">
+                  Trivia moment
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTriviaCards((previous) =>
+                      previous.filter(
+                        (card) => card.eventId !== triviaCard.eventId,
+                      ),
+                    )
+                  }
+                  className="text-xs text-amber-200 hover:text-white"
+                >
+                  Dismiss
+                </button>
+              </div>
+
+              <p className="text-base leading-relaxed">{triviaCard.text}</p>
+            </div>
+          ))}
+
         {error && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             {error}
@@ -1033,6 +1232,18 @@ const WatchPageDetails = () => {
                   onSeeked={() => emitPlaybackControl("seek")}
                   className="h-full w-full object-contain"
                 >
+                  {subtitleVariants.map((variant) => (
+                    <track
+                      key={variant.variantId}
+                      kind="subtitles"
+                      srcLang={variant.locale}
+                      label={variant.label}
+                      src={`${API_BASE_URL}/titles/${titleId}/subtitle-variants/${variant.variantId}`}
+                      default={
+                        variant.variantId === selectedSubtitle?.variantId
+                      }
+                    />
+                  ))}
                   Your browser does not support HTML5 video.
                 </video>
               ) : (
@@ -1043,6 +1254,28 @@ const WatchPageDetails = () => {
             </div>
 
             <div className="space-y-4 p-6">
+              {subtitleVariants.length > 0 && (
+                <label className="flex items-center gap-3 text-sm text-gray-300">
+                  Subtitles
+                  <select
+                    value={selectedSubtitle?.variantId || "off"}
+                    onChange={(event) =>
+                      setSubtitleSelection({
+                        watchSpaceId,
+                        variantId: event.target.value,
+                      })
+                    }
+                    className="rounded border border-white/10 bg-[#141414] px-3 py-2 text-white"
+                  >
+                    <option value="off">Off</option>
+                    {subtitleVariants.map((variant) => (
+                      <option key={variant.variantId} value={variant.variantId}>
+                        {variant.label} ({variant.locale})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div>
                 <h1 className="text-2xl font-bold">
                   {title?.name || "Untitled Movie"}
@@ -1536,6 +1769,122 @@ const WatchPageDetails = () => {
             </div>
           )}
         </section>
+
+        {/* AI Co-Pilot */}
+        {(isHost || isParticipant) && !isEnded && (
+          <section className="rounded-xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+            <div className="mb-5">
+              <h2 className="text-xl font-semibold">AI Co-Pilot</h2>
+              <p className="mt-1 text-sm text-gray-400">
+                Ask about the story up to the current playback moment. Answers
+                are grounded in this title&apos;s timeline metadata.
+              </p>
+            </div>
+
+            <form
+              onSubmit={handleAskAI}
+              className="flex flex-col gap-3 sm:flex-row"
+            >
+              <label className="sr-only" htmlFor="ai-copilot-question">
+                Ask a question about this title
+              </label>
+              <input
+                id="ai-copilot-question"
+                type="text"
+                value={aiQuestion}
+                onChange={(event) => setAiQuestion(event.target.value)}
+                maxLength={1000}
+                placeholder="Ask a question about what has happened so far..."
+                disabled={isAskingAI}
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#252525] px-4 py-3 text-sm text-white outline-none focus:border-red-500 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={!aiQuestion.trim() || isAskingAI}
+                className="rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:self-stretch"
+              >
+                {isAskingAI ? "Thinking..." : "Send"}
+              </button>
+            </form>
+
+            {currentAiError && (
+              <p
+                className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+                role="alert"
+              >
+                {currentAiError}
+              </p>
+            )}
+
+            {isAskingAI && (
+              <p className="mt-4 text-sm text-gray-400" role="status">
+                Checking the title timeline...
+              </p>
+            )}
+
+            {!currentAiResponse && !currentAiError && !isAskingAI && (
+              <p className="mt-4 text-sm text-gray-500" aria-live="polite">
+                Your grounded answer will appear here.
+              </p>
+            )}
+
+            {currentAiResponse && (
+              <div className="mt-5 space-y-4" aria-live="polite">
+                <div className="rounded-lg border border-white/10 bg-[#101010] p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-white">
+                    Answer
+                  </h3>
+                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
+                    {currentAiResponse.answer ||
+                      "No answer was returned for this question."}
+                  </p>
+                </div>
+
+                {aiSourceEvents.length > 0 ? (
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-gray-300">
+                      Timeline sources
+                    </h3>
+                    <ul className="space-y-2">
+                      {aiSourceEvents.map(
+                        ({ eventId, timelineEvent }, index) => {
+                          const eventText =
+                            timelineEvent?.text !== undefined &&
+                            timelineEvent?.text !== null
+                              ? timelineEvent.text
+                              : timelineEvent?.description;
+
+                          return (
+                            <li
+                              key={`${String(eventId)}-${index}`}
+                              className="rounded-lg border border-white/10 bg-[#202020] p-3"
+                            >
+                              <p className="text-xs font-medium text-red-300">
+                                Event {String(eventId)}
+                              </p>
+                              {typeof eventText === "string" &&
+                                eventText.trim() && (
+                                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-300">
+                                    {eventText}
+                                  </p>
+                                )}
+                            </li>
+                          );
+                        },
+                      )}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
+                    No supporting timeline events were returned. The answer
+                    above indicates when the requested information is
+                    unavailable in the title metadata.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* WatchSpace Live Chat */}
         {isParticipant && !isEnded && (

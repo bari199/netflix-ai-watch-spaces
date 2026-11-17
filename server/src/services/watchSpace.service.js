@@ -8,6 +8,7 @@ export const createWatchSpace = async (
   maxParticipants = 50,
   aiVerbosity = "normal",
   votingEnabled = true,
+  triviaEnabled = true,
 ) => {
   const inviteCode = isPrivate ? randomBytes(6).toString("hex") : null;
 
@@ -24,6 +25,7 @@ export const createWatchSpace = async (
     isPrivate,
     inviteCode,
     aiVerbosity,
+    triviaEnabled,
     votingEnabled,
   });
 
@@ -32,7 +34,10 @@ export const createWatchSpace = async (
 
 export const getWatchSpaceById = async (watchSpaceId, userId) => {
   const watchSpace = await WatchSpace.findById(watchSpaceId)
-    .populate("title", "name description duration thumbnailKey timeline")
+    .populate(
+      "title",
+      "name description duration thumbnailKey timeline subtitleVariants.variantId subtitleVariants.locale subtitleVariants.label subtitleVariants.eventId subtitleVariants.variationId subtitleVariants.optionId",
+    )
     .populate("host", "name avatar")
     .populate("participants.user", "name avatar");
 

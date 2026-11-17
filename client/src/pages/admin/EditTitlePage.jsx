@@ -1,9 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/axios.js";
-import VariationTimelineEditor, {
-  validateVariationTimeline,
-} from "../../components/admin/VariationTimelineEditor.jsx";
+import VariationTimelineEditor from "../../components/admin/VariationTimelineEditor.jsx";
+import SubtitleVariantEditor from "../../components/admin/SubtitleVariantEditor.jsx";
+import {
+  normalizeTimelineForSubmission,
+  validateTimelineMetadata,
+} from "../../utils/timelineMetadata.js";
+import {
+  prepareSubtitleVariantSubmission,
+  validateSubtitleVariants,
+} from "../../utils/subtitleVariants.js";
+
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
+).replace(/\/+$/, "");
 
 const EditTitlePage = () => {
   const { titleId } = useParams();
@@ -19,9 +30,13 @@ const EditTitlePage = () => {
   });
 
   const [timeline, setTimeline] = useState([]);
+  const [subtitleVariants, setSubtitleVariants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [existingVideoKey, setExistingVideoKey] = useState("");
+  const [existingThumbnailKey, setExistingThumbnailKey] = useState("");
+  const [video, setVideo] = useState(null);
   const [thumbnail, setThumbnail] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState("");
 
@@ -52,11 +67,24 @@ const EditTitlePage = () => {
         });
 
         setTimeline(Array.isArray(title.timeline) ? title.timeline : []);
+        setExistingVideoKey(title.videoKey || "");
+        setExistingThumbnailKey(title.thumbnailKey || "");
+        setSubtitleVariants(
+          (Array.isArray(title.subtitleVariants)
+            ? title.subtitleVariants
+            : []
+          ).map((variant) => ({
+            ...variant,
+            draftId: `saved-${variant.variantId}`,
+            file: null,
+            eventId: variant.eventId || "",
+            variationId: variant.variationId || "",
+            optionId: variant.optionId || "",
+          })),
+        );
 
         if (title.thumbnailKey) {
-          setThumbnailPreview(
-            `${import.meta.env.VITE_API_BASE_URL}/titles/${titleId}/thumbnail`,
-          );
+          setThumbnailPreview(`${API_BASE_URL}/titles/${titleId}/thumbnail`);
         } else {
           setThumbnailPreview("");
         }
@@ -122,6 +150,22 @@ const EditTitlePage = () => {
     });
   };
 
+  const handleVideoChange = (event) => {
+    const file = event.target.files?.[0] || null;
+
+    if (
+      file &&
+      !["video/mp4", "video/webm", "video/quicktime"].includes(file.type)
+    ) {
+      setError("Video must be MP4, WEBM or MOV.");
+      event.target.value = "";
+      return;
+    }
+
+    setError("");
+    setVideo(file);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -139,13 +183,25 @@ const EditTitlePage = () => {
       return;
     }
 
-    const timelineError = validateVariationTimeline(
-      timeline,
-      formData.duration,
-    );
+    if (
+      video &&
+      !["video/mp4", "video/webm", "video/quicktime"].includes(video.type)
+    ) {
+      setError("Video must be MP4, WEBM or MOV.");
+      return;
+    }
+
+    const timelineError = validateTimelineMetadata(timeline, formData.duration);
 
     if (timelineError) {
       setError(timelineError);
+      return;
+    }
+
+    const subtitleError = validateSubtitleVariants(subtitleVariants, timeline);
+
+    if (subtitleError) {
+      setError(subtitleError);
       return;
     }
 
@@ -166,24 +222,7 @@ const EditTitlePage = () => {
         isPublished: formData.isPublished,
       };
 
-      const normalizedTimeline = timeline.map((item) => {
-        if (item?.eventType !== "variationPoint") return item;
-
-        return {
-          ...item,
-          eventId: item.eventId,
-          eventType: "variationPoint",
-          startTime: Number(item.startTime),
-          endTime: Number(item.endTime),
-          description: String(item.description || "").trim(),
-          variationId: String(item.variationId || "").trim(),
-          options: (item.options || []).map((option) => ({
-            ...option,
-            id: String(option.id || "").trim(),
-            label: String(option.label || "").trim(),
-          })),
-        };
-      });
+      const normalizedTimeline = normalizeTimelineForSubmission(timeline);
 
       const data = new FormData();
 
@@ -202,7 +241,23 @@ const EditTitlePage = () => {
         data.append("thumbnail", thumbnail);
       }
 
+      if (video) {
+        data.append("video", video);
+      }
+
       await api.patch(`/titles/${titleId}`, data);
+
+      const subtitleSubmission =
+        prepareSubtitleVariantSubmission(subtitleVariants);
+      const subtitleData = new FormData();
+      subtitleData.append(
+        "variants",
+        JSON.stringify(subtitleSubmission.variants),
+      );
+      subtitleSubmission.files.forEach((file) =>
+        subtitleData.append("subtitleFiles", file),
+      );
+      await api.put(`/titles/${titleId}/subtitle-variants`, subtitleData);
 
       navigate("/admin/titles", { replace: true });
     } catch (err) {
@@ -224,7 +279,7 @@ const EditTitlePage = () => {
       <div>
         <h1 className="text-3xl font-bold">Edit Title</h1>
         <p className="mt-2 text-sm text-gray-400">
-          Update title information and configure interactive variation points.
+          Update title information and timeline metadata.
         </p>
       </div>
 
@@ -264,19 +319,71 @@ const EditTitlePage = () => {
           />
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium">
-            Thumbnail Image
-          </label>
-
-          {thumbnailPreview && (
-            <img
-              src={thumbnailPreview}
-              alt="Title thumbnail"
-              className="mb-4 aspect-video w-full max-w-md rounded-lg border border-white/10 object-cover"
-            />
+        <div className="space-y-3">
+          <label className="block text-sm font-medium">Current Video</label>
+          {existingVideoKey ? (
+            <>
+              <p className="text-xs text-gray-400">
+                Stored as: {existingVideoKey.split("/").pop()}
+              </p>
+              <video
+                controls
+                preload="metadata"
+                src={`${API_BASE_URL}/titles/${titleId}/video`}
+                className="aspect-video w-full rounded-lg border border-white/10 bg-black"
+              >
+                Your browser does not support HTML5 video.
+              </video>
+            </>
+          ) : (
+            <p className="text-sm text-yellow-300">
+              No existing video reference was returned for this title.
+            </p>
           )}
 
+          <label className="block text-sm font-medium">Replace Video</label>
+          <input
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime"
+            onChange={handleVideoChange}
+            className="w-full rounded-lg border border-white/10 bg-[#141414] p-3 text-sm"
+          />
+          <p className="text-xs text-gray-500">
+            Optional. Leave empty to keep the current video. Supported formats:
+            MP4, WEBM and MOV.
+          </p>
+          {video && (
+            <p className="text-sm text-green-400">
+              Replacement selected: {video.name}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium">
+            Existing Thumbnail
+          </label>
+
+          {existingThumbnailKey || thumbnailPreview ? (
+            <div className="mb-4">
+              <p className="mb-2 text-xs text-gray-400">
+                Stored as: {existingThumbnailKey.split("/").pop()}
+              </p>
+              <img
+                src={thumbnailPreview}
+                alt="Current title thumbnail"
+                className="aspect-video w-full max-w-md rounded-lg border border-white/10 object-cover"
+              />
+            </div>
+          ) : (
+            <p className="mb-4 text-sm text-gray-500">
+              No thumbnail is currently set.
+            </p>
+          )}
+
+          <label className="mb-2 block text-sm font-medium">
+            Replace Thumbnail
+          </label>
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -285,9 +392,13 @@ const EditTitlePage = () => {
           />
 
           <p className="mt-2 text-xs text-gray-500">
-            Select a new image only if you want to replace the current
-            thumbnail.
+            Optional. Leave empty to keep the current thumbnail.
           </p>
+          {thumbnail && (
+            <p className="mt-2 text-sm text-green-400">
+              Replacement selected: {thumbnail.name}
+            </p>
+          )}
         </div>
 
         <div>
@@ -337,6 +448,12 @@ const EditTitlePage = () => {
           timeline={timeline}
           onChange={setTimeline}
           duration={formData.duration}
+        />
+
+        <SubtitleVariantEditor
+          variants={subtitleVariants}
+          onChange={setSubtitleVariants}
+          timeline={timeline}
         />
 
         <label className="flex items-center gap-3 text-sm">

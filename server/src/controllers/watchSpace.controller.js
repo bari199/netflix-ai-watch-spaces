@@ -71,8 +71,14 @@ const handleWatchSpaceError = (res, error) => {
 // Create WatchSpace
 export const createWatchSpaceController = async (req, res) => {
   try {
-    const { titleId, isPrivate, maxParticipants, aiVerbosity, votingEnabled } =
-      req.body;
+    const {
+      titleId,
+      isPrivate,
+      maxParticipants,
+      aiVerbosity,
+      votingEnabled,
+      triviaEnabled,
+    } = req.body;
 
     if (!titleId) {
       return res.status(400).json({
@@ -90,6 +96,9 @@ export const createWatchSpaceController = async (req, res) => {
       votingEnabled === undefined
         ? true
         : votingEnabled === true || votingEnabled === "true",
+      triviaEnabled === undefined
+        ? true
+        : triviaEnabled === true || triviaEnabled === "true",
     );
 
     return res.status(201).json({

@@ -21,11 +21,11 @@ const fileFilter = (req, file, callback) => {
     return callback(null, true);
   }
 
-  callback(
-    new Error(
-      "Invalid file type. Video: MP4, WEBM, MOV. Thumbnail: JPEG, PNG, WEBP.",
-    ),
+  const error = new Error(
+    "Invalid file type. Video: MP4, WEBM, MOV. Thumbnail: JPEG, PNG, WEBP.",
   );
+  error.status = 400;
+  callback(error);
 };
 
 const uploadVideo = multer({

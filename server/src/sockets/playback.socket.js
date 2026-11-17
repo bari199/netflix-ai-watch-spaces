@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Title from "../models/Title.js";
 import WatchSpace from "../models/WatchSpace.js";
 
 // Playback synchronization configuration
@@ -7,8 +8,128 @@ const HOST_POSITION_MAX_AGE_MS = 2000;
 
 // Stores the latest authoritative host position per WatchSpace
 const hostPlaybackPositions = new Map();
+const triggeredTriviaByWatchSpace = new Map();
 
-const applyDueVariation = async (
+const getCanonicalTriviaText = (event) => {
+  if (typeof event?.text === "string" && event.text.trim()) {
+    return event.text.trim();
+  }
+
+  if (typeof event?.description === "string" && event.description.trim()) {
+    return event.description.trim();
+  }
+
+  return "";
+};
+
+export const triggerDueTriviaEvents = async (
+  io,
+  watchSpaceId,
+  previousPosition,
+  currentPosition,
+  watchSpaceOverride,
+) => {
+  if (!mongoose.isValidObjectId(String(watchSpaceId))) {
+    return;
+  }
+
+  if (!Number.isFinite(currentPosition) || currentPosition < 0) {
+    return;
+  }
+
+  if (
+    previousPosition !== null &&
+    previousPosition !== undefined &&
+    !Number.isFinite(previousPosition)
+  ) {
+    return;
+  }
+
+  const targetId = String(watchSpaceId);
+  const watchSpace =
+    watchSpaceOverride ||
+    (await WatchSpace.findById(targetId).populate("title", "timeline"));
+
+  if (
+    !watchSpace ||
+    watchSpace.status === "ended" ||
+    !watchSpace.triviaEnabled
+  ) {
+    return;
+  }
+
+  const titleRecord = Array.isArray(watchSpace.title?.timeline)
+    ? watchSpace.title
+    : await Title.findById(watchSpace.title).select("timeline");
+
+  const timeline = Array.isArray(titleRecord?.timeline)
+    ? titleRecord.timeline
+    : [];
+
+  const eligibleEvents = timeline.filter(
+    (event) =>
+      event &&
+      event.eventType === "trivia" &&
+      Number.isFinite(Number(event.startTime)) &&
+      Number.isFinite(Number(event.endTime)) &&
+      Number(event.startTime) >= 0 &&
+      Number(event.endTime) >= Number(event.startTime) &&
+      typeof event.eventId === "string" &&
+      event.eventId.trim() &&
+      getCanonicalTriviaText(event),
+  );
+
+  const triggered =
+    triggeredTriviaByWatchSpace.get(targetId) ||
+    new Set(watchSpace.triggeredTriviaEventIds || []);
+  const dueEvents = [];
+
+  for (const event of eligibleEvents) {
+    const startTime = Number(event.startTime);
+
+    const hasCrossedMarker =
+      (previousPosition !== null &&
+        previousPosition !== undefined &&
+        previousPosition < startTime &&
+        currentPosition >= startTime) ||
+      (startTime === 0 && previousPosition === 0 && currentPosition === 0);
+
+    if (!hasCrossedMarker || triggered.has(String(event.eventId))) {
+      continue;
+    }
+
+    triggered.add(String(event.eventId));
+    dueEvents.push(event);
+  }
+
+  if (dueEvents.length > 0) {
+    triggeredTriviaByWatchSpace.set(targetId, triggered);
+    watchSpace.triggeredTriviaEventIds = [...triggered];
+
+    try {
+      await watchSpace.save();
+    } catch (error) {
+      for (const event of dueEvents) {
+        triggered.delete(String(event.eventId));
+      }
+      throw error;
+    }
+
+    for (const event of dueEvents) {
+      io.to(`watchspace:${targetId}`).emit("room.ai.trivia", {
+        watchSpaceId: targetId,
+        eventId: String(event.eventId),
+        eventType: event.eventType,
+        startTime: Number(event.startTime),
+        endTime: Number(event.endTime),
+        text: getCanonicalTriviaText(event),
+        triggeredAt: Date.now(),
+      });
+    }
+  }
+};
+
+export const applyDueVariation = async (
   io,
   watchSpaceId,
   previousPosition,
@@ -28,10 +149,7 @@ const applyDueVariation = async (
         "activeVote.status": "closed",
         "activeVote.appliedAt": null,
         $expr: {
-          $and: [
-            { $gt: ["$activeVote.applyAtSeconds", previousPosition] },
-            { $lte: ["$activeVote.applyAtSeconds", currentPosition] },
-          ],
+          $lte: ["$activeVote.applyAtSeconds", currentPosition],
         },
       },
       {
@@ -127,11 +245,21 @@ const registerPlaybackHandlers = (io, socket) => {
         watchSpace.playback.state = "buffering";
       }
 
+      const previousPlaybackPosition = watchSpace.playback.positionSeconds;
+
       watchSpace.playback.positionSeconds = positionSeconds;
       watchSpace.playback.updatedAt = new Date();
       watchSpace.playback.updatedBy = socket.user._id;
 
       await watchSpace.save();
+
+      await triggerDueTriviaEvents(
+        io,
+        watchSpaceId,
+        previousPlaybackPosition,
+        positionSeconds,
+        watchSpace,
+      );
 
       // Update authoritative Host position for synchronization
       hostPlaybackPositions.set(watchSpaceId.toString(), {
@@ -275,25 +403,45 @@ const registerPlaybackHandlers = (io, socket) => {
 
       const receivedAt = Date.now();
 
+      let previousHostPosition = null;
+
       // Only the Host can update the authoritative playback position
       if (isHost) {
+        previousHostPosition =
+          hostPlaybackPositions.get(watchSpaceId.toString())?.positionSeconds ??
+          watchSpace.playback.positionSeconds;
+
+        const previousPlaybackPosition = watchSpace.playback.positionSeconds;
+        watchSpace.playback.positionSeconds = positionSeconds;
+        watchSpace.playback.updatedAt = new Date();
+        watchSpace.playback.updatedBy = socket.user._id;
+
+        await watchSpace.save();
+        await triggerDueTriviaEvents(
+          io,
+          watchSpaceId,
+          previousPlaybackPosition,
+          positionSeconds,
+          watchSpace,
+        );
+
         hostPlaybackPositions.set(watchSpaceId.toString(), {
           positionSeconds,
           receivedAt,
           state: watchSpace.playback.state,
         });
+        io.to(roomName).emit("room.playback.position", {
+          watchSpaceId: watchSpaceId.toString(),
+          positionSeconds,
+          updatedAt: receivedAt,
+        });
       }
 
-      // Only the Host can update the authoritative playback position
       if (isHost) {
-        const previousHostPosition = hostPlaybackPositions.get(
-          watchSpaceId.toString(),
-        );
-
         await applyDueVariation(
           io,
           watchSpaceId.toString(),
-          previousHostPosition?.positionSeconds ?? null,
+          previousHostPosition,
           positionSeconds,
           watchSpace.playback.state,
         );

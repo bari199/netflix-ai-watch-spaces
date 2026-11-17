@@ -22,6 +22,31 @@ const isParticipant = (watchSpace, userId) => {
   );
 };
 
+export const resolveVariationWinner = (options, votes) => {
+  const voteCounts = Object.fromEntries(
+    options.map((option) => [option.id, 0]),
+  );
+
+  for (const vote of votes) {
+    if (Object.prototype.hasOwnProperty.call(voteCounts, vote.optionId)) {
+      voteCounts[vote.optionId] += 1;
+    }
+  }
+
+  let winningOptionId = null;
+  let highestVotes = -1;
+
+  options.forEach((option) => {
+    const count = voteCounts[option.id] ?? 0;
+    if (count > highestVotes) {
+      highestVotes = count;
+      winningOptionId = option.id;
+    }
+  });
+
+  return { voteCounts, winningOptionId };
+};
+
 const closeVote = async (io, watchSpaceId) => {
   try {
     const watchSpace = await WatchSpace.findById(watchSpaceId);
@@ -33,30 +58,10 @@ const closeVote = async (io, watchSpaceId) => {
     // Prevent duplicate vote closing
     if (vote.status !== "open") return;
 
-    const voteCounts = {};
-
-    vote.options.forEach((option) => {
-      voteCounts[option.id] = 0;
-    });
-
-    vote.votes.forEach((participantVote) => {
-      if (voteCounts[participantVote.optionId] !== undefined) {
-        voteCounts[participantVote.optionId] += 1;
-      }
-    });
-
-    // Resolve ties using the original authored option order
-    let winningOptionId = null;
-    let highestVotes = -1;
-
-    vote.options.forEach((option) => {
-      const count = voteCounts[option.id] ?? 0;
-
-      if (count > highestVotes) {
-        highestVotes = count;
-        winningOptionId = option.id;
-      }
-    });
+    const { voteCounts, winningOptionId } = resolveVariationWinner(
+      vote.options,
+      vote.votes,
+    );
 
     vote.status = "closed";
     vote.winningOptionId = winningOptionId;

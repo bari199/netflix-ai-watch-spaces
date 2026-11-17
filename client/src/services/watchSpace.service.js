@@ -13,6 +13,14 @@ export const getWatchSpaceById = async (watchSpaceId) => {
   return response.data;
 };
 
+// Ask the AI Co-Pilot using the WatchSpace's server-side playback position
+export const askWatchSpaceAI = async (watchSpaceId, question) => {
+  const response = await api.post(`/watch-spaces/${watchSpaceId}/ai/ask`, {
+    question,
+  });
+  return response.data;
+};
+
 // Create a new WatchSpace
 export const createWatchSpace = async (watchSpaceData) => {
   const response = await api.post("/watch-spaces", watchSpaceData);

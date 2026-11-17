@@ -8,6 +8,8 @@ import {
   getTitleVideo,
 } from "../services/title.service.js";
 
+import getTimelineEvents from "../services/ai/timeline.service.js";
+
 // Handle controller errors
 const handleTitleError = (res, error) => {
   console.error("Title API Error:", error.message);
@@ -261,6 +263,47 @@ export const getTitleVideoController = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to stream video",
+    });
+  }
+};
+
+export const getTitleTimelineController = async (req, res) => {
+  try {
+    const from = Number(req.query.from);
+    const to = Number(req.query.to);
+
+    if (
+      req.query.from === undefined ||
+      req.query.to === undefined ||
+      !Number.isFinite(from) ||
+      !Number.isFinite(to) ||
+      from < 0 ||
+      to < from
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid from and to query parameters are required",
+      });
+    }
+
+    const events = await getTimelineEvents(req.params.titleId, from, to);
+
+    return res.status(200).json({
+      success: true,
+      count: events.length,
+      events,
+    });
+  } catch (error) {
+    console.error("Get title timeline error:", error.message);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message:
+        error.statusCode === 404
+          ? "Title not found"
+          : error.statusCode === 400
+            ? error.message
+            : "Unable to retrieve title timeline",
     });
   }
 };

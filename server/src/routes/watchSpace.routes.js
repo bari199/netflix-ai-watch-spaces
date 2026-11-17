@@ -6,6 +6,7 @@ import authorizeRoles, {
   authorizeWatchSpaceHost,
 } from "../middleware/role.middleware.js";
 import validate from "../middleware/validate.middleware.js";
+import { askWatchSpaceAIController } from "../controllers/ai.controller.js";
 
 import {
   createWatchSpaceController,
@@ -34,6 +35,22 @@ router.get(
   getWatchSpaceByIdController,
 );
 
+// Authenticated WatchSpace host/participant: Ask the AI co-pilot
+router.post(
+  "/:watchSpaceId/ai/ask",
+  authenticate,
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+  body("question")
+    .isString()
+    .withMessage("Question must be a string")
+    .bail()
+    .trim()
+    .notEmpty()
+    .withMessage("A question is required"),
+  validate,
+  askWatchSpaceAIController,
+);
+
 // Host/Admin: Create WatchSpace
 router.post(
   "/",
@@ -58,6 +75,11 @@ router.post(
     .optional()
     .isBoolean({ strict: true })
     .withMessage("Voting enabled must be a boolean"),
+
+  body("triviaEnabled")
+    .optional()
+    .isBoolean({ strict: true })
+    .withMessage("Trivia enabled must be a boolean"),
 
   validate,
   createWatchSpaceController,

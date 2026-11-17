@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios.js";
-import VariationTimelineEditor, {
-  validateVariationTimeline,
-} from "../../components/admin/VariationTimelineEditor.jsx";
+import VariationTimelineEditor from "../../components/admin/VariationTimelineEditor.jsx";
+import SubtitleVariantEditor from "../../components/admin/SubtitleVariantEditor.jsx";
+import {
+  normalizeTimelineForSubmission,
+  validateTimelineMetadata,
+} from "../../utils/timelineMetadata.js";
+import {
+  prepareSubtitleVariantSubmission,
+  validateSubtitleVariants,
+} from "../../utils/subtitleVariants.js";
 
 const CreateTitlePage = () => {
   const navigate = useNavigate();
@@ -18,11 +25,41 @@ const CreateTitlePage = () => {
   });
 
   const [timeline, setTimeline] = useState([]);
+  const [subtitleVariants, setSubtitleVariants] = useState([]);
   const [video, setVideo] = useState(null);
   const [thumbnail, setThumbnail] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [createdTitleId, setCreatedTitleId] = useState("");
+
+  const uploadSubtitleVariants = async (targetTitleId) => {
+    const submission = prepareSubtitleVariantSubmission(subtitleVariants);
+    const subtitleData = new FormData();
+    subtitleData.append("variants", JSON.stringify(submission.variants));
+    submission.files.forEach((file) =>
+      subtitleData.append("subtitleFiles", file),
+    );
+    await api.put(`/titles/${targetTitleId}/subtitle-variants`, subtitleData);
+  };
+
+  const handleSubtitleRetry = async () => {
+    if (!createdTitleId || loading) return;
+
+    try {
+      setLoading(true);
+      setError("");
+      await uploadSubtitleVariants(createdTitleId);
+      navigate("/admin/titles", { replace: true });
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Title was created, but subtitle upload failed. Retry the subtitle upload.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!thumbnail) {
@@ -48,6 +85,8 @@ const CreateTitlePage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    if (createdTitleId) return;
+
     if (!video) {
       setError("Please select a video file.");
       return;
@@ -61,15 +100,20 @@ const CreateTitlePage = () => {
       return;
     }
 
-    const timelineError = validateVariationTimeline(
-      timeline,
-      formData.duration,
-    );
+    const timelineError = validateTimelineMetadata(timeline, formData.duration);
 
     if (timelineError) {
       setError(timelineError);
       return;
     }
+
+    const subtitleError = validateSubtitleVariants(subtitleVariants, timeline);
+    if (subtitleError) {
+      setError(subtitleError);
+      return;
+    }
+
+    let newlyCreatedTitleId = "";
 
     try {
       setLoading(true);
@@ -96,24 +140,7 @@ const CreateTitlePage = () => {
 
       data.append("isPublished", String(formData.isPublished));
 
-      const normalizedTimeline = timeline.map((item) => {
-        if (item?.eventType !== "variationPoint") return item;
-
-        return {
-          ...item,
-          eventId: item.eventId,
-          eventType: "variationPoint",
-          startTime: Number(item.startTime),
-          endTime: Number(item.endTime),
-          description: String(item.description || "").trim(),
-          variationId: String(item.variationId || "").trim(),
-          options: (item.options || []).map((option) => ({
-            ...option,
-            id: String(option.id || "").trim(),
-            label: String(option.label || "").trim(),
-          })),
-        };
-      });
+      const normalizedTimeline = normalizeTimelineForSubmission(timeline);
 
       data.append("timeline", JSON.stringify(normalizedTimeline));
       data.append("video", video);
@@ -122,11 +149,29 @@ const CreateTitlePage = () => {
         data.append("thumbnail", thumbnail);
       }
 
-      await api.post("/titles", data);
+      const response = await api.post("/titles", data);
+      newlyCreatedTitleId = response.data?.title?._id;
+
+      if (!newlyCreatedTitleId) {
+        throw new Error("Title was created, but its ID was not returned.");
+      }
+
+      if (subtitleVariants.length > 0) {
+        setCreatedTitleId(newlyCreatedTitleId);
+        await uploadSubtitleVariants(newlyCreatedTitleId);
+      }
 
       navigate("/admin/titles", { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create title.");
+      if (newlyCreatedTitleId) {
+        setCreatedTitleId(newlyCreatedTitleId);
+        setError(
+          err.response?.data?.message ||
+            "Title was created, but subtitle upload failed. Retry the subtitle upload.",
+        );
+      } else {
+        setError(err.response?.data?.message || "Failed to create title.");
+      }
     } finally {
       setLoading(false);
     }
@@ -146,7 +191,7 @@ const CreateTitlePage = () => {
         </Link>
         <h1 className="mt-4 text-3xl font-bold">Create New Title</h1>
         <p className="mt-2 text-sm text-gray-400">
-          Add movie information, thumbnail, video and variation points.
+          Add movie information, media, and timeline metadata.
         </p>
       </div>
 
@@ -299,6 +344,12 @@ const CreateTitlePage = () => {
           duration={formData.duration}
         />
 
+        <SubtitleVariantEditor
+          variants={subtitleVariants}
+          onChange={setSubtitleVariants}
+          timeline={timeline}
+        />
+
         <label className="flex items-center gap-3 text-sm text-gray-300">
           <input
             type="checkbox"
@@ -312,11 +363,21 @@ const CreateTitlePage = () => {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || Boolean(createdTitleId)}
           className="w-full rounded-lg bg-red-600 px-5 py-3 font-semibold transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Uploading..." : "Create Title"}
         </button>
+        {createdTitleId && (
+          <button
+            type="button"
+            onClick={handleSubtitleRetry}
+            disabled={loading}
+            className="w-full rounded-lg border border-white/20 px-5 py-3 font-semibold transition hover:bg-white/10 disabled:opacity-50"
+          >
+            {loading ? "Uploading subtitles..." : "Retry subtitle upload"}
+          </button>
+        )}
       </form>
     </div>
   );

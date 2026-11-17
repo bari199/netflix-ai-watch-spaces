@@ -122,11 +122,23 @@ const variationOptionSchema = new mongoose.Schema(
   { _id: false },
 );
 
+export const TIMELINE_EVENT_TYPES = [
+  "scene",
+  "characterAppearance",
+  "trivia",
+  "glossary",
+  "variationPoint",
+];
+
 const timelineEventSchema = new mongoose.Schema(
   {
     eventId: {
       type: String,
       required: true,
+      trim: true,
+    },
+    text: {
+      type: String,
       trim: true,
     },
     startTime: {
@@ -143,10 +155,10 @@ const timelineEventSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      enum: TIMELINE_EVENT_TYPES,
     },
     description: {
       type: String,
-      required: true,
       trim: true,
     },
     transcript: {
@@ -159,6 +171,14 @@ const timelineEventSchema = new mongoose.Schema(
         trim: true,
       },
     ],
+    characterId: {
+      type: String,
+      trim: true,
+    },
+    characterName: {
+      type: String,
+      trim: true,
+    },
 
     // Narrative variation voting (PRD)
     variationId: {
@@ -169,6 +189,47 @@ const timelineEventSchema = new mongoose.Schema(
     options: {
       type: [variationOptionSchema],
       default: [],
+    },
+  },
+  { _id: false, strict: false },
+);
+
+const subtitleVariantSchema = new mongoose.Schema(
+  {
+    variantId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    locale: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    label: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    storageKey: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    eventId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    variationId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    optionId: {
+      type: String,
+      default: null,
+      trim: true,
     },
   },
   { _id: false },
@@ -212,6 +273,10 @@ const titleSchema = new mongoose.Schema(
     },
     timeline: {
       type: [timelineEventSchema],
+      default: [],
+    },
+    subtitleVariants: {
+      type: [subtitleVariantSchema],
       default: [],
     },
     isPublished: {
