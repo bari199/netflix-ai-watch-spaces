@@ -77,9 +77,33 @@ export const createCloudflareAIClient = ({
         });
       }
 
+      // Capture actual Cloudflare API error details
       if (!response?.ok) {
+        const errorBody = await response.text();
+
+        let errorDetails = errorBody;
+
+        try {
+          const parsedBody = JSON.parse(errorBody);
+
+          errorDetails =
+            parsedBody.errors
+              ?.map((item) => item.message)
+              .filter(Boolean)
+              .join("; ") ||
+            parsedBody.messages
+              ?.map((item) => item.message)
+              .filter(Boolean)
+              .join("; ") ||
+            errorBody;
+        } catch {
+          // Keep original response text if JSON parsing fails.
+        }
+
         throw new Error(
-          `Cloudflare Workers AI request failed with status ${response?.status ?? "unknown"}`,
+          `Cloudflare Workers AI failed: HTTP ${
+            response.status
+          } - ${String(errorDetails).slice(0, 1000)}`,
         );
       }
 
@@ -102,6 +126,7 @@ export const createCloudflareAIClient = ({
       }
 
       const firstChoice = payload.result.choices?.[0];
+
       const hasAnswerContent =
         typeof firstChoice?.message?.content === "string" ||
         typeof payload.result.response === "string";
@@ -143,6 +168,7 @@ const createEvidenceEvents = (timelineContext) => {
     }
 
     const canonicalContentField = getCanonicalTimelineContentField(event);
+
     const fields = [
       "eventId",
       "startTime",
@@ -182,17 +208,21 @@ const createMessages = (question, evidenceEvents) => [
       "Use text when present; use description only for legacy events without text.",
       "Do not paraphrase, translate, combine, or add any text to excerpts.",
       "Select only excerpts that directly provide evidence relevant to the question.",
-      "If no supplied excerpt directly supports the question, return {\"selections\":[]}.",
+      'If no supplied excerpt directly supports the question, return {"selections":[]}.',
     ].join(" "),
   },
   {
     role: "user",
-    content: JSON.stringify({ question, timelineEvents: evidenceEvents }),
+    content: JSON.stringify({
+      question,
+      timelineEvents: evidenceEvents,
+    }),
   },
 ];
 
 const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
   const rawFinishReason = modelResult?.choices?.[0]?.finish_reason;
+
   const modelFinishReason =
     typeof rawFinishReason === "string"
       ? ["stop", "length", "tool_calls", "content_filter"].includes(
@@ -201,11 +231,11 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
         ? rawFinishReason
         : "other"
       : null;
+
   const content =
     typeof modelResult === "string"
       ? modelResult
-      : modelResult?.choices?.[0]?.message?.content ??
-        modelResult?.response;
+      : (modelResult?.choices?.[0]?.message?.content ?? modelResult?.response);
 
   const responseContentPresent = typeof content === "string";
 
@@ -217,6 +247,7 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
       rejectionCategory: "truncated_output",
       finalAcceptedCitationCount: 0,
     });
+
     return unavailableResult();
   }
 
@@ -228,14 +259,26 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
       rejectionCategory: "provider_error",
       finalAcceptedCitationCount: 0,
     });
-    throw new Error("Cloudflare Workers AI returned an invalid answer response");
+
+    throw new Error(
+      "Cloudflare Workers AI returned an invalid answer response",
+    );
   }
 
   let result;
 
   try {
-    result = JSON.parse(content);
-  } catch {
+    // Remove Markdown JSON code fences if the model returns them.
+    const normalizedContent = content
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/, "")
+      .trim();
+
+    result = JSON.parse(normalizedContent);
+  } catch (error) {
+    console.error("[Cloudflare AI JSON Parsing Error]", error.message);
+
     diagnose({
       modelFinishReason,
       responseContentPresent,
@@ -243,9 +286,9 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
       rejectionCategory: "malformed_json",
       finalAcceptedCitationCount: 0,
     });
+
     return unavailableResult();
   }
-
   const parsedSelectionCount = Array.isArray(result?.selections)
     ? result.selections.length
     : 0;
@@ -262,12 +305,14 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
       rejectionCategory: "empty_selection",
       finalAcceptedCitationCount: 0,
     });
+
     return unavailableResult();
   }
 
   const eventsById = new Map(
     evidenceEvents.map((event) => [event.eventId, event]),
   );
+
   const verifiedSelections = [];
   const seenSelections = new Set();
 
@@ -285,6 +330,7 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
         rejectionCategory: "invalid_event_id",
         finalAcceptedCitationCount: 0,
       });
+
       return unavailableResult();
     }
 
@@ -298,13 +344,11 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
         rejectionCategory: "invalid_event_id",
         finalAcceptedCitationCount: 0,
       });
+
       return unavailableResult();
     }
 
-    if (
-      typeof selection.excerpt !== "string" ||
-      !selection.excerpt.trim()
-    ) {
+    if (typeof selection.excerpt !== "string" || !selection.excerpt.trim()) {
       diagnose({
         modelFinishReason,
         responseContentPresent,
@@ -312,6 +356,7 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
         rejectionCategory: "invalid_excerpt",
         finalAcceptedCitationCount: 0,
       });
+
       return unavailableResult();
     }
 
@@ -325,21 +370,22 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
         rejectionCategory: "invalid_excerpt",
         finalAcceptedCitationCount: 0,
       });
+
       return unavailableResult();
     }
 
     const excerptStart = sourceText.indexOf(selection.excerpt);
+
     const verifiedExcerpt = sourceText.slice(
       excerptStart,
       excerptStart + selection.excerpt.length,
     );
-    const selectionKey = JSON.stringify([
-      selection.eventId,
-      verifiedExcerpt,
-    ]);
+
+    const selectionKey = JSON.stringify([selection.eventId, verifiedExcerpt]);
 
     if (!seenSelections.has(selectionKey)) {
       seenSelections.add(selectionKey);
+
       verifiedSelections.push({
         eventId: selection.eventId,
         excerpt: verifiedExcerpt,
@@ -355,6 +401,7 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
       rejectionCategory: "empty_selection",
       finalAcceptedCitationCount: 0,
     });
+
     return unavailableResult();
   }
 
@@ -382,8 +429,7 @@ export const answerQuestion = async (
   {
     aiClient,
     retrieveTimelineContext = retrieveRelevantTimelineEvents,
-    diagnosticLogger = (diagnostic) =>
-      console.info(JSON.stringify(diagnostic)),
+    diagnosticLogger = (diagnostic) => console.info(JSON.stringify(diagnostic)),
   } = {},
 ) => {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -407,6 +453,7 @@ export const answerQuestion = async (
     typeof input.requestId === "string" && input.requestId
       ? input.requestId
       : randomUUID();
+
   const diagnosticState = {
     watchSpaceId,
     watchSpaceLookupOutcome: "not_attempted",
@@ -416,6 +463,7 @@ export const answerQuestion = async (
     temporalCandidateCount: null,
     retrievedCandidateCount: 0,
   };
+
   const diagnose = (diagnostic = {}) =>
     diagnosticLogger({
       event: "watchspace.ai_qa",
@@ -430,6 +478,7 @@ export const answerQuestion = async (
     });
 
   let context;
+
   try {
     context =
       timelineContext === undefined
@@ -447,43 +496,53 @@ export const answerQuestion = async (
           : error?.message === "WatchSpace playback position is invalid"
             ? "invalid_playback_position"
             : "timeline_retrieval_error";
+
     diagnose({ rejectionCategory });
+
     if (error && typeof error === "object") {
       error.aiRejectionCategory = rejectionCategory;
     }
+
     throw error;
   }
 
   if (timelineContext !== undefined) {
-    diagnosticState.timelineEventCount =
-      Number.isInteger(context?.timelineEventCount)
-        ? context.timelineEventCount
-        : Array.isArray(context?.events)
-          ? context.events.length
-          : null;
+    diagnosticState.timelineEventCount = Number.isInteger(
+      context?.timelineEventCount,
+    )
+      ? context.timelineEventCount
+      : Array.isArray(context?.events)
+        ? context.events.length
+        : null;
+
     diagnosticState.playbackPositionSeconds = Number.isFinite(
       context?.currentTime,
     )
       ? context.currentTime
       : null;
+
     diagnosticState.temporalCandidateCount = Number.isInteger(
       context?.temporalCandidateCount,
     )
       ? context.temporalCandidateCount
       : null;
+
     diagnosticState.retrievedCandidateCount = Array.isArray(context?.events)
       ? context.events.length
       : 0;
   }
 
   let evidenceEvents;
+
   try {
     evidenceEvents = createEvidenceEvents(context);
   } catch (error) {
     diagnose({ rejectionCategory: "invalid_retrieved_context" });
+
     if (error && typeof error === "object") {
       error.aiRejectionCategory = "invalid_retrieved_context";
     }
+
     throw error;
   }
 
@@ -496,7 +555,9 @@ export const answerQuestion = async (
         : diagnosticState.temporalCandidateCount === 0
           ? "no_temporal_candidates"
           : "no_retrieved_evidence";
+
     diagnose({ rejectionCategory });
+
     return unavailableResult();
   }
 
@@ -504,16 +565,22 @@ export const answerQuestion = async (
 
   try {
     const client = aiClient || createCloudflareAIClient();
+
     response = await client.generate({
       messages: createMessages(question.trim(), evidenceEvents),
     });
   } catch (error) {
+    // Print the actual Cloudflare error in the backend terminal.
+    console.error("[Cloudflare AI Provider Error]", error?.message || error);
+
     diagnose({
       rejectionCategory: "provider_error",
     });
+
     if (error && typeof error === "object") {
       error.aiRejectionCategory = "provider_error";
     }
+
     throw error;
   }
 

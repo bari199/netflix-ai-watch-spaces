@@ -21,6 +21,7 @@ import {
 
 const router = express.Router();
 
+// Video and thumbnail upload error handling
 const handleUpload = (fields) => {
   const upload = uploadVideo.fields(fields);
 
@@ -37,14 +38,17 @@ const handleUpload = (fields) => {
         });
       }
 
-      next(error);
+      return next(error);
     });
   };
 };
 
+// Subtitle upload error handling
 const handleSubtitleUpload = (req, res, next) => {
   uploadSubtitleFiles(req, res, (error) => {
-    if (!error) return next();
+    if (!error) {
+      return next();
+    }
 
     if (error.status === 400 || error.name === "MulterError") {
       return res.status(400).json({
@@ -81,7 +85,6 @@ router.post(
 );
 
 // Admin: Update title
-// Admin: Update title
 router.patch(
   "/:titleId",
   authenticate,
@@ -95,6 +98,7 @@ router.patch(
   updateTitleController,
 );
 
+// Admin: Update subtitle variants
 router.put(
   "/:titleId/subtitle-variants",
   authenticate,
@@ -105,6 +109,7 @@ router.put(
   updateTitleSubtitleVariantsController,
 );
 
+// Public: Get a subtitle variant
 router.get(
   "/:titleId/subtitle-variants/:variantId",
   param("titleId").isMongoId().withMessage("Invalid title ID"),
@@ -112,12 +117,20 @@ router.get(
   getTitleSubtitleController,
 );
 
-// Get title thumbnail
+// Public: Get title thumbnail
 router.get(
   "/:titleId/thumbnail",
   param("titleId").isMongoId().withMessage("Invalid title ID"),
   validate,
   getTitleThumbnailController,
+);
+
+// Public: Stream title video
+router.get(
+  "/:titleId/video",
+  param("titleId").isMongoId().withMessage("Invalid title ID"),
+  validate,
+  getTitleVideoController,
 );
 
 // Admin: Delete title
@@ -128,13 +141,6 @@ router.delete(
   param("titleId").isMongoId().withMessage("Invalid title ID"),
   validate,
   deleteTitleController,
-);
-
-router.get(
-  "/:titleId/video",
-  param("titleId").isMongoId().withMessage("Invalid title ID"),
-  validate,
-  getTitleVideoController,
 );
 
 export default router;

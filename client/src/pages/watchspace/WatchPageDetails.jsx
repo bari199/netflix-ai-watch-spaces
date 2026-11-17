@@ -19,9 +19,12 @@ import {
   disconnectSocket,
 } from "../../services/socket.service.js";
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
-).replace(/\/+$/, "");
+// Configure VITE_API_BASE_URL in the frontend .env file.
+// The relative fallback avoids hardcoding a local development host.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
+  /\/+$/,
+  "",
+);
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "👏"];
 
@@ -68,6 +71,7 @@ const WatchPageDetails = () => {
   const applyingRemoteUpdateRef = useRef(false);
   const chatMessagesEndRef = useRef(null);
   const qualityIntervalRef = useRef(null);
+  const fetchRequestIdRef = useRef(0);
 
   const currentUserId = String(user?._id || user?.id || "");
 
@@ -84,20 +88,63 @@ const WatchPageDetails = () => {
   const fetchWatchSpace = useCallback(async () => {
     if (!watchSpaceId) return;
 
+    const requestId = ++fetchRequestIdRef.current;
+
     try {
       setLoading(true);
       setError("");
 
       const response = await getWatchSpaceById(watchSpaceId);
-      const fetchedWatchSpace = response?.watchSpace || null;
 
+      // Ignore responses belonging to an older WatchSpace route.
+      if (requestId !== fetchRequestIdRef.current) return;
+
+      const fetchedWatchSpace = response?.watchSpace || null;
       setWatchSpace(fetchedWatchSpace);
       setActiveVote(fetchedWatchSpace?.activeVote || null);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load WatchSpace.");
+      if (requestId === fetchRequestIdRef.current) {
+        setError(err?.response?.data?.message || "Failed to load WatchSpace.");
+        setWatchSpace(null);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === fetchRequestIdRef.current) {
+        setLoading(false);
+      }
     }
+  }, [watchSpaceId]);
+
+  useEffect(() => {
+    // Invalidate any request started for the previous route.
+    fetchRequestIdRef.current += 1;
+    setWatchSpace(null);
+    setLoading(true);
+    setError("");
+
+    setChatMessages([]);
+    setTypingUsers([]);
+    setChatInput("");
+    setOnlineParticipants([]);
+    setConnectionLatency(null);
+    setConnectionQuality("checking");
+    setHostDisconnected(false);
+
+    setAiQuestion("");
+    setAiResponse(null);
+    setAiError(null);
+    setIsAskingAI(false);
+    aiSubmittingRef.current = false;
+
+    setActiveVote(null);
+    setSelectedVariationId("");
+    setSelectedVoteOption("");
+    setVoteSecondsLeft(0);
+    setVoteResult(null);
+    setVoteMessage("");
+    setTriviaCards([]);
+    setSubtitleSelection(null);
+
+    seenTriviaEventIdsRef.current.clear();
   }, [watchSpaceId]);
 
   useEffect(() => {
@@ -132,24 +179,75 @@ const WatchPageDetails = () => {
     .sort(
       (first, second) => Number(second.startTime) - Number(first.startTime),
     )[0];
-  const subtitleVariants = (title?.subtitleVariants || []).filter(
-    (variant) =>
-      (!variant.eventId || activeTimelineEvent?.eventId === variant.eventId) &&
-      (!variant.variationId ||
-        (activeVote?.status === "applied" &&
-          activeVote.variationId === variant.variationId &&
-          activeVote.winningOptionId === variant.optionId)),
-  );
+
+  // Keep all four AI Co-Pilot prompt cards visible at every playback position.
+  // The backend remains responsible for grounding answers in available timeline metadata.
+  const aiSuggestedQuestions = [
+    {
+      type: "scene",
+      label: "Explain this scene",
+      question: "Explain the important scenes and events so far.",
+      description: "Understand scenes and story events",
+      icon: "🎬",
+    },
+    {
+      type: "characterAppearance",
+      label: "Explore characters",
+      question: "Which characters have appeared so far?",
+      description: "Explore character appearances",
+      icon: "👤",
+    },
+    {
+      type: "trivia",
+      label: "Interesting facts",
+      question: "What interesting facts are available so far?",
+      description: "Discover available trivia",
+      icon: "💡",
+    },
+    {
+      type: "glossary",
+      label: "Explain a term",
+      question: "Explain the important terms introduced so far.",
+      description: "Understand important terms",
+      icon: "📖",
+    },
+  ];
+
+  const subtitleVariants = (
+    Array.isArray(title?.subtitleVariants) ? title.subtitleVariants : []
+  ).filter((variant) => {
+    if (!variant || typeof variant !== "object" || !variant.variantId) {
+      return false;
+    }
+
+    const eventMatches =
+      !variant.eventId ||
+      String(activeTimelineEvent?.eventId) === String(variant.eventId);
+    const variationMatches =
+      !variant.variationId ||
+      (activeVote?.status === "applied" &&
+        String(activeVote.variationId) === String(variant.variationId) &&
+        String(activeVote.winningOptionId) === String(variant.optionId));
+
+    return eventMatches && variationMatches;
+  });
+
   const browserLocale =
-    typeof navigator !== "undefined" ? navigator.language : "";
+    typeof navigator !== "undefined" && typeof navigator.language === "string"
+      ? navigator.language
+      : "";
+  const normalizedBrowserLocale = browserLocale.toLowerCase();
+  const browserLanguage = normalizedBrowserLocale.split("-")[0];
   const preferredSubtitle =
     subtitleVariants.find(
-      (variant) => variant.locale.toLowerCase() === browserLocale.toLowerCase(),
+      (variant) =>
+        typeof variant.locale === "string" &&
+        variant.locale.toLowerCase() === normalizedBrowserLocale,
     ) ||
     subtitleVariants.find(
       (variant) =>
-        variant.locale.split("-")[0].toLowerCase() ===
-        browserLocale.split("-")[0].toLowerCase(),
+        typeof variant.locale === "string" &&
+        variant.locale.split("-")[0].toLowerCase() === browserLanguage,
     ) ||
     subtitleVariants[0];
   const selectedSubtitleId =
@@ -160,7 +258,7 @@ const WatchPageDetails = () => {
     selectedSubtitleId === "off"
       ? null
       : subtitleVariants.find(
-          (variant) => variant.variantId === selectedSubtitleId,
+          (variant) => String(variant.variantId) === String(selectedSubtitleId),
         ) || preferredSubtitle;
   const currentAiResponse =
     aiResponse?.watchSpaceId === watchSpaceId ? aiResponse : null;
@@ -176,10 +274,6 @@ const WatchPageDetails = () => {
       (event) => String(event?.eventId) === String(eventId),
     ),
   }));
-
-  useEffect(() => {
-    seenTriviaEventIdsRef.current.clear();
-  }, [watchSpaceId]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -317,8 +411,6 @@ const WatchPageDetails = () => {
     const handleConnectError = (err) => {
       console.error("Socket connection error:", err?.message);
     };
-
-    // Remote Playback Update
 
     // Remote Playback Update
     const handlePlaybackUpdate = async (data) => {
@@ -1428,21 +1520,6 @@ const WatchPageDetails = () => {
           </aside>
         </section>
 
-        {/* Host Controls */}
-        {isHost && !isEnded && (
-          <section className="rounded-xl border border-white/10 bg-[#181818] p-6">
-            <h2 className="mb-4 text-xl font-semibold">Host Controls</h2>
-
-            <button
-              onClick={handleToggleLock}
-              disabled={actionLoading}
-              className="rounded-lg bg-white/10 px-5 py-3 text-sm transition hover:bg-white/20 disabled:opacity-50"
-            >
-              {watchSpace.isLocked ? "Unlock Room" : "Lock Room"}
-            </button>
-          </section>
-        )}
-
         {/* Narrative Variation Voting */}
         {isParticipant && !isEnded && watchSpace.votingEnabled && (
           <section className="rounded-xl border border-white/10 bg-[#181818] p-6">
@@ -1781,6 +1858,40 @@ const WatchPageDetails = () => {
               </p>
             </div>
 
+            {aiSuggestedQuestions.length > 0 && (
+              <div className="mb-5">
+                <h3 className="mb-3 text-sm font-medium text-gray-300">
+                  Suggested Questions
+                </h3>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {aiSuggestedQuestions.map((item) => (
+                    <button
+                      key={item.type}
+                      type="button"
+                      onClick={() => setAiQuestion(item.question)}
+                      disabled={isAskingAI}
+                      className={`rounded-lg border p-4 text-left transition-colors ${
+                        aiQuestion === item.question
+                          ? "border-red-500 bg-red-500/10"
+                          : "border-white/10 bg-[#252525] hover:border-red-500/50"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      <span className="mb-2 block text-2xl">{item.icon}</span>
+
+                      <span className="block text-sm font-semibold text-white">
+                        {item.label}
+                      </span>
+
+                      <span className="mt-1 block text-xs text-gray-400">
+                        {item.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <form
               onSubmit={handleAskAI}
               className="flex flex-col gap-3 sm:flex-row"
@@ -1842,10 +1953,11 @@ const WatchPageDetails = () => {
 
                 {aiSourceEvents.length > 0 ? (
                   <div>
-                    <h3 className="mb-2 text-sm font-semibold text-gray-300">
-                      Timeline sources
+                    <h3 className="mb-3 text-sm font-semibold text-gray-300">
+                      Timeline Sources
                     </h3>
-                    <ul className="space-y-2">
+
+                    <ul className="space-y-3">
                       {aiSourceEvents.map(
                         ({ eventId, timelineEvent }, index) => {
                           const eventText =
@@ -1857,17 +1969,28 @@ const WatchPageDetails = () => {
                           return (
                             <li
                               key={`${String(eventId)}-${index}`}
-                              className="rounded-lg border border-white/10 bg-[#202020] p-3"
+                              className="rounded-lg border border-white/10 bg-[#202020] p-4"
                             >
-                              <p className="text-xs font-medium text-red-300">
-                                Event {String(eventId)}
-                              </p>
+                              <div className="mb-2 flex items-center gap-2">
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600/15 text-xs font-bold text-red-400">
+                                  {index + 1}
+                                </span>
+
+                                <p className="text-xs font-semibold uppercase tracking-wider text-red-400">
+                                  Source {index + 1}
+                                </p>
+                              </div>
+
                               {typeof eventText === "string" &&
-                                eventText.trim() && (
-                                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-300">
-                                    {eventText}
-                                  </p>
-                                )}
+                              eventText.trim() ? (
+                                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-300">
+                                  {eventText}
+                                </p>
+                              ) : (
+                                <p className="text-sm italic text-gray-500">
+                                  Timeline description is unavailable.
+                                </p>
+                              )}
                             </li>
                           );
                         },
@@ -1876,9 +1999,7 @@ const WatchPageDetails = () => {
                   </div>
                 ) : (
                   <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
-                    No supporting timeline events were returned. The answer
-                    above indicates when the requested information is
-                    unavailable in the title metadata.
+                    No supporting timeline events were returned.
                   </p>
                 )}
               </div>

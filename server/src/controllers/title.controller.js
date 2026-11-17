@@ -6,9 +6,9 @@ import {
   deleteTitle,
   getTitleThumbnail,
   getTitleVideo,
+  updateTitleSubtitleVariants,
+  getTitleSubtitle,
 } from "../services/title.service.js";
-
-import getTimelineEvents from "../services/ai/timeline.service.js";
 
 // Handle controller errors
 const handleTitleError = (res, error) => {
@@ -21,7 +21,11 @@ const handleTitleError = (res, error) => {
     });
   }
 
-  if (error.message === "Title not found") {
+  if (
+    error.message === "Title not found" ||
+    error.message === "Subtitle variant not found" ||
+    error.message === "Thumbnail not found"
+  ) {
     return res.status(404).json({
       success: false,
       message: error.message,
@@ -44,6 +48,25 @@ const handleTitleError = (res, error) => {
   });
 };
 
+// Parse JSON fields from multipart/form-data
+const parseTitleJsonFields = (data) => {
+  const parsedData = { ...data };
+
+  try {
+    if (typeof parsedData.genre === "string") {
+      parsedData.genre = JSON.parse(parsedData.genre);
+    }
+
+    if (typeof parsedData.timeline === "string") {
+      parsedData.timeline = JSON.parse(parsedData.timeline);
+    }
+  } catch {
+    throw new Error("Invalid JSON format in genre or timeline");
+  }
+
+  return parsedData;
+};
+
 // Create title with video upload
 export const createTitleController = async (req, res) => {
   try {
@@ -57,23 +80,7 @@ export const createTitleController = async (req, res) => {
       });
     }
 
-    const titleData = { ...req.body };
-
-    // Parse JSON fields received through multipart/form-data
-    try {
-      if (typeof titleData.genre === "string") {
-        titleData.genre = JSON.parse(titleData.genre);
-      }
-
-      if (typeof titleData.timeline === "string") {
-        titleData.timeline = JSON.parse(titleData.timeline);
-      }
-    } catch {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid JSON format in genre or timeline",
-      });
-    }
+    const titleData = parseTitleJsonFields(req.body);
 
     const title = await createTitle(
       titleData,
@@ -92,7 +99,7 @@ export const createTitleController = async (req, res) => {
   }
 };
 
-// Get published titles
+// Get all published titles
 export const getPublishedTitlesController = async (req, res) => {
   try {
     const titles = await getPublishedTitles();
@@ -107,7 +114,7 @@ export const getPublishedTitlesController = async (req, res) => {
   }
 };
 
-// Get title by ID
+// Get a published title by ID
 export const getTitleByIdController = async (req, res) => {
   try {
     const title = await getTitleById(req.params.titleId);
@@ -122,35 +129,19 @@ export const getTitleByIdController = async (req, res) => {
 };
 
 // Update title
-
-// Update title
 export const updateTitleController = async (req, res) => {
   try {
     const thumbnailFile = req.files?.thumbnail?.[0];
+    const videoFile = req.files?.video?.[0];
 
-    const updates = {
-      ...req.body,
-    };
+    const updates = parseTitleJsonFields(req.body);
 
-    // Parse JSON fields from multipart/form-data
-    try {
-      if (typeof updates.genre === "string") {
-        updates.genre = JSON.parse(updates.genre);
-      }
-
-      if (typeof updates.timeline === "string") {
-        updates.timeline = JSON.parse(updates.timeline);
-      }
-    } catch {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid JSON format in genre or timeline",
-      });
-    }
-
-    // Attach thumbnail if uploaded
     if (thumbnailFile) {
       updates.thumbnailFile = thumbnailFile;
+    }
+
+    if (videoFile) {
+      updates.videoFile = videoFile;
     }
 
     const title = await updateTitle(req.params.titleId, updates);
@@ -165,15 +156,80 @@ export const updateTitleController = async (req, res) => {
   }
 };
 
-// Delete title
-export const deleteTitleController = async (req, res) => {
+// Update title subtitle variants
+export const updateTitleSubtitleVariantsController = async (req, res) => {
   try {
-    await deleteTitle(req.params.titleId);
+    let variants = req.body.variants;
+
+    if (typeof variants === "string") {
+      try {
+        variants = JSON.parse(variants);
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid JSON format in subtitle variants",
+        });
+      }
+    }
+
+    if (!Array.isArray(variants)) {
+      return res.status(400).json({
+        success: false,
+        message: "Subtitle variants must be an array",
+      });
+    }
+
+    const subtitleFiles = req.files || [];
+
+    const title = await updateTitleSubtitleVariants(
+      req.params.titleId,
+      variants,
+      subtitleFiles,
+    );
+
+    // Do not expose internal MinIO storage keys
+    const safeTitle = title.toObject();
+
+    safeTitle.subtitleVariants = safeTitle.subtitleVariants.map(
+      ({ storageKey, ...variant }) => variant,
+    );
 
     return res.status(200).json({
       success: true,
-      message: "Title deleted successfully",
+      message: "Subtitle variants updated successfully",
+      subtitleVariants: safeTitle.subtitleVariants,
     });
+  } catch (error) {
+    return handleTitleError(res, error);
+  }
+};
+
+// Get a specific subtitle variant
+export const getTitleSubtitleController = async (req, res) => {
+  try {
+    const result = await getTitleSubtitle(
+      req.params.titleId,
+      req.params.variantId,
+    );
+
+    res.set({
+      "Content-Type": result.ContentType || "text/vtt",
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+    });
+
+    result.Body.on("error", (error) => {
+      console.error("Subtitle stream error:", error.message);
+
+      if (!res.headersSent) {
+        res.status(500).end();
+      } else {
+        res.destroy(error);
+      }
+    });
+
+    result.Body.pipe(res);
   } catch (error) {
     return handleTitleError(res, error);
   }
@@ -253,57 +309,20 @@ export const getTitleVideoController = async (req, res) => {
         });
     }
 
-    if (error.message === "Title not found") {
-      return res.status(404).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Unable to stream video",
-    });
+    return handleTitleError(res, error);
   }
 };
 
-export const getTitleTimelineController = async (req, res) => {
+// Delete title
+export const deleteTitleController = async (req, res) => {
   try {
-    const from = Number(req.query.from);
-    const to = Number(req.query.to);
-
-    if (
-      req.query.from === undefined ||
-      req.query.to === undefined ||
-      !Number.isFinite(from) ||
-      !Number.isFinite(to) ||
-      from < 0 ||
-      to < from
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid from and to query parameters are required",
-      });
-    }
-
-    const events = await getTimelineEvents(req.params.titleId, from, to);
+    await deleteTitle(req.params.titleId);
 
     return res.status(200).json({
       success: true,
-      count: events.length,
-      events,
+      message: "Title deleted successfully",
     });
   } catch (error) {
-    console.error("Get title timeline error:", error.message);
-
-    return res.status(error.statusCode || 500).json({
-      success: false,
-      message:
-        error.statusCode === 404
-          ? "Title not found"
-          : error.statusCode === 400
-            ? error.message
-            : "Unable to retrieve title timeline",
-    });
+    return handleTitleError(res, error);
   }
 };
