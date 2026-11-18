@@ -8,6 +8,8 @@ import userRoutes from "./routes/user.routes.js";
 import passport from "./config/passport.js";
 import titleRoutes from "./routes/title.routes.js";
 import watchSpaceRoutes from "./routes/watchSpace.routes.js";
+import recommendationRoutes from "./routes/recommendation.routes.js";
+import interactionRoutes from "./routes/interaction.routes.js";
 
 const app = express();
 
@@ -31,6 +33,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/titles", titleRoutes);
 app.use("/api/watch-spaces", watchSpaceRoutes);
+app.use("/api/recommendations", recommendationRoutes);
+app.use("/api/interactions", interactionRoutes);
 
 app.get("/api/health", (req, res) => {
   const dbStatus =

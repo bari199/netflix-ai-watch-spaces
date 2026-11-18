@@ -9,6 +9,8 @@ import {
   removeParticipant,
   setWatchSpaceLock,
   transferWatchSpaceHost,
+  getUpcomingScheduledWatchSpaces as getUpcomingScheduledWatchSpacesService,
+  getMyActiveWatchSpaces as getMyActiveWatchSpacesService,
 } from "../services/watchSpace.service.js";
 
 const handleWatchSpaceError = (res, error) => {
@@ -78,6 +80,7 @@ export const createWatchSpaceController = async (req, res) => {
       aiVerbosity,
       votingEnabled,
       triviaEnabled,
+      scheduledAt,
     } = req.body;
 
     if (!titleId) {
@@ -85,6 +88,22 @@ export const createWatchSpaceController = async (req, res) => {
         success: false,
         message: "Title ID is required",
       });
+    }
+
+    let parsedScheduledAt = null;
+
+    if (scheduledAt) {
+      parsedScheduledAt = new Date(scheduledAt);
+
+      if (
+        Number.isNaN(parsedScheduledAt.getTime()) ||
+        parsedScheduledAt <= new Date()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Scheduled date must be a valid future date",
+        });
+      }
     }
 
     const watchSpace = await createWatchSpace(
@@ -99,6 +118,7 @@ export const createWatchSpaceController = async (req, res) => {
       triviaEnabled === undefined
         ? true
         : triviaEnabled === true || triviaEnabled === "true",
+      parsedScheduledAt,
     );
 
     return res.status(201).json({
@@ -118,7 +138,9 @@ export const getActiveWatchSpacesController = async (req, res) => {
 
     const safeWatchSpaces = watchSpaces.map((watchSpace) => {
       const watchSpaceData = watchSpace.toObject();
+
       watchSpaceData.inviteCode = null;
+
       return watchSpaceData;
     });
 
@@ -131,8 +153,6 @@ export const getActiveWatchSpacesController = async (req, res) => {
     return handleWatchSpaceError(res, error);
   }
 };
-
-// Get WatchSpace Details
 
 // Get WatchSpace Details
 export const getWatchSpaceByIdController = async (req, res) => {
@@ -239,6 +259,7 @@ export const setParticipantMuteController = async (req, res) => {
   }
 };
 
+// Remove Participant
 export const removeParticipantController = async (req, res) => {
   try {
     const watchSpace = await removeParticipant(
@@ -257,6 +278,7 @@ export const removeParticipantController = async (req, res) => {
   }
 };
 
+// Lock or Unlock WatchSpace
 export const setWatchSpaceLockController = async (req, res) => {
   try {
     const { isLocked } = req.body;
@@ -279,6 +301,7 @@ export const setWatchSpaceLockController = async (req, res) => {
   }
 };
 
+// Transfer WatchSpace Host
 export const transferWatchSpaceHostController = async (req, res) => {
   try {
     const { newHostId } = req.body;
@@ -293,6 +316,48 @@ export const transferWatchSpaceHostController = async (req, res) => {
       success: true,
       message: "WatchSpace host transferred successfully",
       watchSpace,
+    });
+  } catch (error) {
+    return handleWatchSpaceError(res, error);
+  }
+};
+
+// Get Upcoming Scheduled WatchSpaces
+
+// Get Upcoming Scheduled WatchSpaces
+export const getUpcomingScheduledWatchSpacesController = async (req, res) => {
+  try {
+    const limit = req.query.limit || 10;
+
+    const watchSpaces = await getUpcomingScheduledWatchSpacesService(
+      req.user._id,
+      limit,
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: watchSpaces.length,
+      watchSpaces,
+    });
+  } catch (error) {
+    return handleWatchSpaceError(res, error);
+  }
+};
+
+// Get active WatchSpaces for the logged-in user
+export const getMyActiveWatchSpacesController = async (req, res) => {
+  try {
+    const limit = req.query.limit || 10;
+
+    const watchSpaces = await getMyActiveWatchSpacesService(
+      req.user._id,
+      limit,
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: watchSpaces.length,
+      watchSpaces,
     });
   } catch (error) {
     return handleWatchSpaceError(res, error);

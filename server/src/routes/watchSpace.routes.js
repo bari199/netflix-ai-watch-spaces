@@ -2,9 +2,7 @@ import express from "express";
 import { param, body } from "express-validator";
 
 import authenticate from "../middleware/auth.middleware.js";
-import authorizeRoles, {
-  authorizeWatchSpaceHost,
-} from "../middleware/role.middleware.js";
+import { authorizeWatchSpaceHost } from "../middleware/role.middleware.js";
 import validate from "../middleware/validate.middleware.js";
 import { askWatchSpaceAIController } from "../controllers/ai.controller.js";
 
@@ -19,6 +17,8 @@ import {
   removeParticipantController,
   setWatchSpaceLockController,
   transferWatchSpaceHostController,
+  getUpcomingScheduledWatchSpacesController,
+  getMyActiveWatchSpacesController,
 } from "../controllers/watchSpace.controller.js";
 
 const router = express.Router();
@@ -26,6 +26,13 @@ const router = express.Router();
 // Public: Get active WatchSpaces
 router.get("/", getActiveWatchSpacesController);
 
+router.get(
+  "/upcoming",
+  authenticate,
+  getUpcomingScheduledWatchSpacesController,
+);
+// Authenticated: Get my active WatchSpaces
+router.get("/my-active", authenticate, getMyActiveWatchSpacesController);
 // Authenticated: Get WatchSpace details
 router.get(
   "/:watchSpaceId",
@@ -51,11 +58,11 @@ router.post(
   askWatchSpaceAIController,
 );
 
-// Host/Admin: Create WatchSpace
+// Authenticated users: Create WatchSpace
+// The creator automatically becomes the Host of this WatchSpace.
 router.post(
   "/",
   authenticate,
-  authorizeRoles("host", "admin"),
 
   body("titleId").isMongoId().withMessage("Invalid Title ID"),
 

@@ -9,6 +9,7 @@ export const createWatchSpace = async (
   aiVerbosity = "normal",
   votingEnabled = true,
   triviaEnabled = true,
+  scheduledAt = null,
 ) => {
   const inviteCode = isPrivate ? randomBytes(6).toString("hex") : null;
 
@@ -27,6 +28,8 @@ export const createWatchSpace = async (
     aiVerbosity,
     triviaEnabled,
     votingEnabled,
+    status: scheduledAt ? "scheduled" : "waiting",
+    scheduledAt,
   });
 
   return watchSpace;
@@ -62,7 +65,7 @@ export const getWatchSpaceById = async (watchSpaceId, userId) => {
 
 export const getActiveWatchSpaces = async () => {
   return WatchSpace.find({
-    status: { $ne: "ended" },
+    status: { $in: ["waiting", "active"] },
     isPrivate: false,
   })
     .populate("title", "name duration thumbnailKey")
@@ -296,4 +299,33 @@ export const transferWatchSpaceHost = async (
   await watchSpace.save();
 
   return watchSpace;
+};
+
+// Get upcoming scheduled WatchSpaces for a user
+export const getUpcomingScheduledWatchSpaces = async (userId, limit = 10) => {
+  const safeLimit = Math.min(20, Math.max(1, Number(limit) || 10));
+
+  return WatchSpace.find({
+    status: "scheduled",
+    scheduledAt: { $gt: new Date() },
+    $or: [{ host: userId }, { "participants.user": userId }],
+  })
+    .populate("title", "name description duration thumbnailKey")
+    .populate("host", "name avatar")
+    .sort({ scheduledAt: 1 })
+    .limit(safeLimit);
+};
+
+// Get active WatchSpaces the current user can rejoin
+export const getMyActiveWatchSpaces = async (userId, limit = 10) => {
+  const safeLimit = Math.min(20, Math.max(1, Number(limit) || 10));
+
+  return WatchSpace.find({
+    status: "active",
+    $or: [{ host: userId }, { "participants.user": userId }],
+  })
+    .populate("title", "name description duration thumbnailKey")
+    .populate("host", "name avatar")
+    .sort({ updatedAt: -1 })
+    .limit(safeLimit);
 };

@@ -1,12 +1,13 @@
 import mongoose from "mongoose";
 import Title from "../models/Title.js";
 import WatchSpace from "../models/WatchSpace.js";
+import { recordPlaybackProgress } from "../services/interaction.service.js";
 
 // Playback synchronization configuration
 const DRIFT_THRESHOLD_SECONDS = 0.25;
 const HOST_POSITION_MAX_AGE_MS = 2000;
 
-// Stores the latest authoritative host position per WatchSpace
+// Stores the latest authoritative host position per WatchSpace.
 const hostPlaybackPositions = new Map();
 const triggeredTriviaByWatchSpace = new Map();
 
@@ -29,13 +30,9 @@ export const triggerDueTriviaEvents = async (
   currentPosition,
   watchSpaceOverride,
 ) => {
-  if (!mongoose.isValidObjectId(String(watchSpaceId))) {
-    return;
-  }
+  if (!mongoose.isValidObjectId(String(watchSpaceId))) return;
 
-  if (!Number.isFinite(currentPosition) || currentPosition < 0) {
-    return;
-  }
+  if (!Number.isFinite(currentPosition) || currentPosition < 0) return;
 
   if (
     previousPosition !== null &&
@@ -46,6 +43,7 @@ export const triggerDueTriviaEvents = async (
   }
 
   const targetId = String(watchSpaceId);
+
   const watchSpace =
     watchSpaceOverride ||
     (await WatchSpace.findById(targetId).populate("title", "timeline"));
@@ -82,6 +80,7 @@ export const triggerDueTriviaEvents = async (
   const triggered =
     triggeredTriviaByWatchSpace.get(targetId) ||
     new Set(watchSpace.triggeredTriviaEventIds || []);
+
   const dueEvents = [];
 
   for (const event of eligibleEvents) {
@@ -102,30 +101,31 @@ export const triggerDueTriviaEvents = async (
     dueEvents.push(event);
   }
 
-  if (dueEvents.length > 0) {
-    triggeredTriviaByWatchSpace.set(targetId, triggered);
-    watchSpace.triggeredTriviaEventIds = [...triggered];
+  if (dueEvents.length === 0) return;
 
-    try {
-      await watchSpace.save();
-    } catch (error) {
-      for (const event of dueEvents) {
-        triggered.delete(String(event.eventId));
-      }
-      throw error;
-    }
+  triggeredTriviaByWatchSpace.set(targetId, triggered);
+  watchSpace.triggeredTriviaEventIds = [...triggered];
 
+  try {
+    await watchSpace.save();
+  } catch (error) {
     for (const event of dueEvents) {
-      io.to(`watchspace:${targetId}`).emit("room.ai.trivia", {
-        watchSpaceId: targetId,
-        eventId: String(event.eventId),
-        eventType: event.eventType,
-        startTime: Number(event.startTime),
-        endTime: Number(event.endTime),
-        text: getCanonicalTriviaText(event),
-        triggeredAt: Date.now(),
-      });
+      triggered.delete(String(event.eventId));
     }
+
+    throw error;
+  }
+
+  for (const event of dueEvents) {
+    io.to(`watchspace:${targetId}`).emit("room.ai.trivia", {
+      watchSpaceId: targetId,
+      eventId: String(event.eventId),
+      eventType: event.eventType,
+      startTime: Number(event.startTime),
+      endTime: Number(event.endTime),
+      text: getCanonicalTriviaText(event),
+      triggeredAt: Date.now(),
+    });
   }
 };
 
@@ -139,7 +139,9 @@ export const applyDueVariation = async (
   try {
     if (playbackState !== "playing") return;
 
-    if (previousPosition === null || previousPosition === undefined) return;
+    if (previousPosition === null || previousPosition === undefined) {
+      return;
+    }
 
     if (currentPosition <= previousPosition) return;
 
@@ -181,34 +183,155 @@ export const applyDueVariation = async (
 };
 
 const registerPlaybackHandlers = (io, socket) => {
+  const progressTrackers = new Map();
+
+  const PROGRESS_PERSIST_INTERVAL_MS = 15000;
+  const PROGRESS_RETRY_INTERVAL_MS = 5000;
+  const MAX_REPORT_INTERVAL_SECONDS = 5;
+  const MAX_POSITION_DRIFT_SECONDS = 1.5;
+  const MAX_PENDING_PROGRESS_SECONDS = 30;
+
+  const getUserId = () => socket.user?._id?.toString();
+
+  const getTrackerKey = (watchSpaceId) => `${watchSpaceId}:${getUserId()}`;
+
+  const getValidatedTitleDuration = async (watchSpace) => {
+    const titleId = watchSpace.title?._id || watchSpace.title;
+
+    const title = await Title.findById(titleId).select("duration");
+
+    if (
+      !title ||
+      typeof title.duration !== "number" ||
+      !Number.isFinite(title.duration) ||
+      title.duration <= 0
+    ) {
+      throw new Error("Valid title duration not found");
+    }
+
+    return title.duration;
+  };
+
+  const validatePosition = (positionSeconds, durationSeconds) => {
+    if (
+      typeof positionSeconds !== "number" ||
+      !Number.isFinite(positionSeconds) ||
+      positionSeconds < 0 ||
+      positionSeconds > durationSeconds
+    ) {
+      throw new Error("Invalid playback position");
+    }
+  };
+
+  // A tracker can have only one database flush in flight at a time.
+  const flushProgressTracker = async (
+    watchSpaceId,
+    watchSpace,
+    { force = false } = {},
+  ) => {
+    const trackerKey = getTrackerKey(watchSpaceId);
+    const tracker = progressTrackers.get(trackerKey);
+
+    if (!tracker) return true;
+    if (tracker.pendingSeconds <= 0) return true;
+
+    if (tracker.flushPromise) {
+      return tracker.flushPromise;
+    }
+
+    const now = Date.now();
+
+    if (!force && now - tracker.lastAttemptAt < PROGRESS_RETRY_INTERVAL_MS) {
+      return false;
+    }
+
+    if (
+      force &&
+      tracker.lastAttemptAt > 0 &&
+      now - tracker.lastAttemptAt < PROGRESS_RETRY_INTERVAL_MS
+    ) {
+      return false;
+    }
+
+    const secondsToSave = Math.min(
+      tracker.pendingSeconds,
+      MAX_PENDING_PROGRESS_SECONDS,
+    );
+
+    const positionSnapshot = tracker.lastPositionSeconds;
+    const titleId = watchSpace.title?._id || watchSpace.title;
+
+    tracker.lastAttemptAt = now;
+
+    tracker.flushPromise = (async () => {
+      try {
+        await recordPlaybackProgress({
+          userId: getUserId(),
+          titleId,
+          watchSpaceId,
+          watchedSeconds: secondsToSave,
+          positionSeconds: positionSnapshot,
+        });
+
+        tracker.pendingSeconds = Math.max(
+          0,
+          tracker.pendingSeconds - secondsToSave,
+        );
+
+        tracker.lastPersistAt = Date.now();
+
+        return true;
+      } catch (error) {
+        console.error("[INTERACTION SAVE ERROR]", {
+          message: error.message,
+          stack: error.stack,
+          userId: tracker.userId,
+          titleId: tracker.titleId,
+          watchSpaceId: tracker.watchSpaceId,
+          pendingSeconds: tracker.pendingSeconds,
+        });
+
+        // Existing retry and pending-progress handling রাখবে।
+      } finally {
+        tracker.flushPromise = null;
+      }
+    })();
+
+    return tracker.flushPromise;
+  };
+
+  const flushAndCleanupTracker = async (watchSpaceId, watchSpace) => {
+    const trackerKey = getTrackerKey(watchSpaceId);
+
+    const flushed = await flushProgressTracker(watchSpaceId, watchSpace, {
+      force: true,
+    });
+
+    const tracker = progressTrackers.get(trackerKey);
+
+    if (flushed && tracker && tracker.pendingSeconds <= 0) {
+      progressTrackers.delete(trackerKey);
+    }
+
+    return flushed;
+  };
+
   socket.on("playback.control", async (data, callback) => {
     try {
       const { watchSpaceId, action, positionSeconds } = data || {};
 
-      // Validate WatchSpace ID
       if (!mongoose.isValidObjectId(watchSpaceId)) {
         throw new Error("Invalid WatchSpace ID");
       }
 
-      // Validate playback action
       const allowedActions = ["play", "pause", "seek", "buffering"];
 
       if (!allowedActions.includes(action)) {
         throw new Error("Invalid playback action");
       }
 
-      // Validate playback position
-      if (
-        typeof positionSeconds !== "number" ||
-        !Number.isFinite(positionSeconds) ||
-        positionSeconds < 0
-      ) {
-        throw new Error("Invalid playback position");
-      }
-
       const roomName = `watchspace:${watchSpaceId}`;
 
-      // Verify socket room membership
       if (!socket.rooms.has(roomName)) {
         throw new Error("You are not connected to this WatchSpace");
       }
@@ -223,30 +346,33 @@ const registerPlaybackHandlers = (io, socket) => {
         throw new Error("WatchSpace has already ended");
       }
 
-      // Only the current host can control playback
-      if (watchSpace.host.toString() !== socket.user._id.toString()) {
+      if (watchSpace.host.toString() !== getUserId()) {
         throw new Error("Only the WatchSpace host can control playback");
       }
 
-      // Update authoritative playback state
-      // Update authoritative playback state
+      const durationSeconds = await getValidatedTitleDuration(watchSpace);
+
+      validatePosition(positionSeconds, durationSeconds);
+
+      if (action === "pause" || action === "buffering") {
+        await flushAndCleanupTracker(watchSpaceId, watchSpace);
+      }
+
+      const previousPlaybackPosition = watchSpace.playback.positionSeconds;
+
       if (action === "play") {
         watchSpace.playback.state = "playing";
 
-        // Activate WatchSpace when Host starts playback
         if (watchSpace.status === "waiting") {
           watchSpace.status = "active";
         }
       } else if (action === "pause") {
         watchSpace.playback.state = "paused";
-      } else if (action === "seek") {
-        watchSpace.playback.state = "seeking";
       } else if (action === "buffering") {
         watchSpace.playback.state = "buffering";
       }
 
-      const previousPlaybackPosition = watchSpace.playback.positionSeconds;
-
+      // Seek changes position but preserves the current play/pause state.
       watchSpace.playback.positionSeconds = positionSeconds;
       watchSpace.playback.updatedAt = new Date();
       watchSpace.playback.updatedBy = socket.user._id;
@@ -261,35 +387,33 @@ const registerPlaybackHandlers = (io, socket) => {
         watchSpace,
       );
 
-      // Update authoritative Host position for synchronization
+      const receivedAt = Date.now();
+
       hostPlaybackPositions.set(watchSpaceId.toString(), {
         positionSeconds,
-        receivedAt: Date.now(),
+        receivedAt,
         state: watchSpace.playback.state,
       });
 
-      // Broadcast playback update to all room members
       const eventPayload = {
         event: "room.playback.update",
         watchSpaceId: watchSpaceId.toString(),
         payload: {
           state: action,
           positionSeconds,
-          issuedBy: socket.user._id.toString(),
+          issuedBy: getUserId(),
         },
-        ts: Date.now(),
+        ts: receivedAt,
       };
 
       io.to(roomName).emit("room.playback.update", eventPayload);
 
-      const response = {
-        success: true,
-        message: "Playback updated successfully",
-        ...eventPayload,
-      };
-
       if (typeof callback === "function") {
-        callback(response);
+        callback({
+          success: true,
+          message: "Playback updated successfully",
+          ...eventPayload,
+        });
       }
     } catch (error) {
       const response = {
@@ -375,14 +499,6 @@ const registerPlaybackHandlers = (io, socket) => {
         throw new Error("Invalid WatchSpace ID");
       }
 
-      if (
-        typeof positionSeconds !== "number" ||
-        !Number.isFinite(positionSeconds) ||
-        positionSeconds < 0
-      ) {
-        throw new Error("Invalid playback position");
-      }
-
       const roomName = `watchspace:${watchSpaceId}`;
 
       if (!socket.rooms.has(roomName)) {
@@ -399,24 +515,80 @@ const registerPlaybackHandlers = (io, socket) => {
         throw new Error("WatchSpace has already ended");
       }
 
-      const isHost = watchSpace.host.toString() === socket.user._id.toString();
+      const durationSeconds = await getValidatedTitleDuration(watchSpace);
+
+      validatePosition(positionSeconds, durationSeconds);
+
+      const isHost = watchSpace.host.toString() === getUserId();
 
       const receivedAt = Date.now();
 
       let previousHostPosition = null;
 
-      // Only the Host can update the authoritative playback position
+      // Track individual user's playback progress.
+      const trackerKey = getTrackerKey(watchSpaceId);
+      let tracker = progressTrackers.get(trackerKey);
+
+      const isPlaying = watchSpace.playback.state === "playing";
+
+      if (!isPlaying) {
+        if (tracker) {
+          await flushAndCleanupTracker(watchSpaceId, watchSpace);
+        }
+      } else if (!tracker) {
+        progressTrackers.set(trackerKey, {
+          lastPositionSeconds: positionSeconds,
+          lastReportAt: receivedAt,
+          lastPersistAt: receivedAt,
+          lastAttemptAt: 0,
+          pendingSeconds: 0,
+          flushPromise: null,
+        });
+      } else {
+        const elapsedSeconds = (receivedAt - tracker.lastReportAt) / 1000;
+
+        const positionDelta = positionSeconds - tracker.lastPositionSeconds;
+
+        // Count only plausible forward movement.
+        if (
+          elapsedSeconds > 0 &&
+          elapsedSeconds <= MAX_REPORT_INTERVAL_SECONDS &&
+          positionDelta >= 0 &&
+          Math.abs(positionDelta - elapsedSeconds) <= MAX_POSITION_DRIFT_SECONDS
+        ) {
+          tracker.pendingSeconds = Math.min(
+            MAX_PENDING_PROGRESS_SECONDS,
+            tracker.pendingSeconds + Math.min(elapsedSeconds, positionDelta),
+          );
+        }
+
+        // Update baseline even when a jump is rejected.
+        tracker.lastPositionSeconds = positionSeconds;
+        tracker.lastReportAt = receivedAt;
+
+        if (
+          tracker.pendingSeconds > 0 &&
+          receivedAt - tracker.lastPersistAt >= PROGRESS_PERSIST_INTERVAL_MS
+        ) {
+          await flushProgressTracker(watchSpaceId, watchSpace);
+        }
+      }
+
+      // Only the Host can update the authoritative playback position.
       if (isHost) {
         previousHostPosition =
           hostPlaybackPositions.get(watchSpaceId.toString())?.positionSeconds ??
           watchSpace.playback.positionSeconds;
 
         const previousPlaybackPosition = watchSpace.playback.positionSeconds;
+
         watchSpace.playback.positionSeconds = positionSeconds;
+
         watchSpace.playback.updatedAt = new Date();
         watchSpace.playback.updatedBy = socket.user._id;
 
         await watchSpace.save();
+
         await triggerDueTriviaEvents(
           io,
           watchSpaceId,
@@ -430,6 +602,7 @@ const registerPlaybackHandlers = (io, socket) => {
           receivedAt,
           state: watchSpace.playback.state,
         });
+
         io.to(roomName).emit("room.playback.position", {
           watchSpaceId: watchSpaceId.toString(),
           positionSeconds,
@@ -460,22 +633,21 @@ const registerPlaybackHandlers = (io, socket) => {
       if (hostPosition) {
         const reportAgeMs = receivedAt - hostPosition.receivedAt;
 
-        if (reportAgeMs <= HOST_POSITION_MAX_AGE_MS) {
+        if (reportAgeMs >= 0 && reportAgeMs <= HOST_POSITION_MAX_AGE_MS) {
           estimatedHostPosition =
             hostPosition.positionSeconds +
             (hostPosition.state === "playing" ? reportAgeMs / 1000 : 0);
         }
       }
 
-      // Calculate playback drift for viewers
+      // Calculate playback drift for viewers.
       let driftSeconds = null;
 
       if (!isHost && estimatedHostPosition !== null) {
         driftSeconds = estimatedHostPosition - positionSeconds;
 
-        // Send correction only when drift exceeds 250ms
         if (Math.abs(driftSeconds) > DRIFT_THRESHOLD_SECONDS) {
-          const correctionPayload = {
+          socket.emit("room.sync.correction", {
             event: "room.sync.correction",
             watchSpaceId: watchSpaceId.toString(),
             payload: {
@@ -484,17 +656,15 @@ const registerPlaybackHandlers = (io, socket) => {
               issuedBy: watchSpace.host.toString(),
             },
             ts: Date.now(),
-          };
-
-          socket.emit("room.sync.correction", correctionPayload);
+          });
         }
       }
 
       const response = {
         success: true,
         message: "Playback position received",
-        watchSpaceId,
-        userId: socket.user._id.toString(),
+        watchSpaceId: watchSpaceId.toString(),
+        userId: getUserId(),
         role: isHost ? "host" : "viewer",
         positionSeconds,
         receivedAt: Date.now(),
@@ -520,36 +690,49 @@ const registerPlaybackHandlers = (io, socket) => {
 
   socket.on("disconnecting", async () => {
     try {
-      const hostId = socket.data.userId;
+      const userId = getUserId();
 
-      if (!hostId) return;
+      if (!userId) return;
 
       for (const roomName of socket.rooms) {
         if (!roomName.startsWith("watchspace:")) continue;
 
-        const watchSpaceId = roomName.replace("watchspace:", "");
+        const watchSpaceId = roomName.slice("watchspace:".length);
 
-        if (!mongoose.isValidObjectId(watchSpaceId)) continue;
+        if (!mongoose.isValidObjectId(watchSpaceId)) {
+          continue;
+        }
 
         const watchSpace = await WatchSpace.findById(watchSpaceId);
 
-        if (!watchSpace || watchSpace.status === "ended") continue;
+        if (!watchSpace) continue;
 
-        // Only handle the current Host's disconnection
-        if (watchSpace.host.toString() !== hostId) continue;
+        // Attempt a final save for pending progress.
+        await flushAndCleanupTracker(watchSpaceId, watchSpace);
 
-        // Check whether another Host socket is still connected
+        if (watchSpace.status === "ended") {
+          continue;
+        }
+
+        // Only the current Host's disconnection should pause playback.
+        if (watchSpace.host.toString() !== userId) {
+          continue;
+        }
+
+        // Check whether another Host socket is still connected.
         const connectedSockets = await io.in(roomName).fetchSockets();
 
         const anotherHostSocketExists = connectedSockets.some(
           (connectedSocket) =>
             connectedSocket.id !== socket.id &&
-            connectedSocket.data.userId === hostId,
+            connectedSocket.data.userId === userId,
         );
 
-        if (anotherHostSocketExists) continue;
+        if (anotherHostSocketExists) {
+          continue;
+        }
 
-        // Preserve the latest known playback position
+        // Preserve the latest known playback position.
         const hostPosition = hostPlaybackPositions.get(watchSpaceId);
 
         if (
@@ -571,14 +754,14 @@ const registerPlaybackHandlers = (io, socket) => {
           state: "paused",
         });
 
-        // Notify remaining WatchSpace participants
+        // Notify remaining WatchSpace participants.
         io.to(roomName).emit("room.playback.update", {
           event: "room.playback.update",
           watchSpaceId,
           payload: {
             state: "pause",
             positionSeconds: watchSpace.playback.positionSeconds,
-            issuedBy: hostId,
+            issuedBy: userId,
             reason: "host_disconnected",
           },
           ts: Date.now(),
@@ -591,7 +774,5 @@ const registerPlaybackHandlers = (io, socket) => {
     }
   });
 };
-
-// Handle Host disconnection
 
 export default registerPlaybackHandlers;

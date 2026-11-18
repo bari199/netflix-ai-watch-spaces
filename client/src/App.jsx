@@ -12,6 +12,9 @@ import EditTitlePage from "./pages/admin/EditTitlePage.jsx";
 import WatchSpacesPage from "./pages/watchspace/WatchSpacesPage.jsx";
 import WatchPageDetails from "./pages/watchspace/watchPageDetails.jsx";
 import CreateWatchSpacePage from "./pages/watchspace/CreateWatchSpacePage.jsx";
+import RecommendedForYou from "./components/titles/RecommendedForYou.jsx";
+import UpcomingWatchSpaces from "./components/watchspace/UpcomingWatchSpaces.jsx";
+import QuickRejoinRooms from "./components/watchspace/QuickRejoinRooms";
 
 function HomePage() {
   const { user, logout } = useAuth();
@@ -31,6 +34,9 @@ function HomePage() {
           >
             Logout
           </button>
+          <QuickRejoinRooms />
+          <UpcomingWatchSpaces />
+          <RecommendedForYou />
         </div>
       ) : (
         <button

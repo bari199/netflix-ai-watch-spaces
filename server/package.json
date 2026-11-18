@@ -6,8 +6,8 @@
   "scripts": {
     "test": "node --test",
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
-    
+    "dev": "node --watch src/server.js",
+    "evaluate:recommendations": "node scripts/evaluate-recommendations.js"
   },
   "keywords": [],
   "author": "",

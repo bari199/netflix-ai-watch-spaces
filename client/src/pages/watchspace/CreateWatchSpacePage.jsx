@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api/axios.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { createWatchSpace } from "../../services/watchSpace.service.js";
 
 const CreateWatchSpacePage = () => {
   const { user } = useAuth();
+
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const requestedTitleId = searchParams.get("titleId");
 
   const [titles, setTitles] = useState([]);
   const [loadingTitles, setLoadingTitles] = useState(true);
@@ -21,10 +24,11 @@ const CreateWatchSpacePage = () => {
     aiVerbosity: "normal",
     triviaEnabled: true,
     votingEnabled: false,
+    scheduledAt: "",
   });
 
-  // Only Host and Admin accounts can create WatchSpaces
-  const canCreateRoom = ["host", "admin"].includes(user?.role);
+  // Only authenticated users can create WatchSpaces
+  const canCreateRoom = Boolean(user);
 
   // Fetch available titles
   useEffect(() => {
@@ -39,9 +43,15 @@ const CreateWatchSpacePage = () => {
         setTitles(availableTitles);
 
         if (availableTitles.length > 0) {
+          const isRequestedTitleAvailable = availableTitles.some(
+            (title) => String(title._id) === String(requestedTitleId),
+          );
+
           setFormData((prev) => ({
             ...prev,
-            titleId: availableTitles[0]._id,
+            titleId: isRequestedTitleAvailable
+              ? requestedTitleId
+              : availableTitles[0]._id,
           }));
         }
       } catch (err) {
@@ -52,8 +62,9 @@ const CreateWatchSpacePage = () => {
     };
 
     fetchTitles();
-  }, []);
+  }, [requestedTitleId]);
 
+  // Handle form changes
   const handleChange = (e) => {
     const { name, value, checked, type } = e.target;
 
@@ -68,6 +79,7 @@ const CreateWatchSpacePage = () => {
     }));
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -90,11 +102,30 @@ const CreateWatchSpacePage = () => {
       return;
     }
 
+    // Convert local date-time to ISO string
+    let scheduledAt = null;
+
+    if (formData.scheduledAt) {
+      const selectedDate = new Date(formData.scheduledAt);
+
+      if (Number.isNaN(selectedDate.getTime()) || selectedDate <= new Date()) {
+        setError("Please select a valid future date and time.");
+        return;
+      }
+
+      scheduledAt = selectedDate.toISOString();
+    }
+
     try {
       setSubmitting(true);
       setError("");
 
-      const response = await createWatchSpace(formData);
+      const payload = {
+        ...formData,
+        scheduledAt,
+      };
+
+      const response = await createWatchSpace(payload);
 
       const watchSpaceId = response.watchSpace?._id || response.watchSpaceId;
 
@@ -214,6 +245,27 @@ const CreateWatchSpacePage = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Schedule WatchSpace */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">
+                Schedule Date & Time
+              </label>
+
+              <input
+                type="datetime-local"
+                name="scheduledAt"
+                value={formData.scheduledAt}
+                onChange={handleChange}
+                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                className={inputClass}
+              />
+
+              <p className="mt-2 text-xs text-gray-500">
+                Leave empty to create a WatchSpace immediately. Select a future
+                date and time to schedule it.
+              </p>
             </div>
 
             {/* Maximum Participants */}

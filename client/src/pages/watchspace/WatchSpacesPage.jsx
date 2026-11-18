@@ -18,7 +18,7 @@ const WatchSpacesPage = () => {
   const [error, setError] = useState("");
   const [joiningId, setJoiningId] = useState(null);
 
-  const canCreateRoom = ["host", "admin"].includes(user?.role);
+  const canCreateRoom = Boolean(user);
 
   const fetchWatchSpaces = useCallback(async () => {
     try {

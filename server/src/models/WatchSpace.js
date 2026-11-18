@@ -182,8 +182,12 @@ const watchSpaceSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["waiting", "active", "ended"],
+      enum: ["scheduled", "waiting", "active", "ended"],
       default: "waiting",
+    },
+    scheduledAt: {
+      type: Date,
+      default: null,
     },
     isPrivate: {
       type: Boolean,
