@@ -1,3 +1,11 @@
+import { AnimatePresence, motion } from "motion/react";
+import { Captions, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Field, fieldClass, fileClass, selectClass } from "./adminUi.jsx";
+
 const createDraft = () => ({
   draftId: `subtitle-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   locale: "",
@@ -22,172 +30,248 @@ const SubtitleVariantEditor = ({ variants, onChange, timeline }) => {
   );
 
   return (
-    <section className="space-y-4 rounded-xl border border-white/10 bg-[#181818] p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Subtitle / Localization Variants</h2>
-          <p className="mt-1 text-xs text-gray-400">
-            Upload pre-authored WebVTT files. Subtitle content is never generated
-            or changed by AI.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => onChange((previous) => [...previous, createDraft()])}
-          className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10"
-        >
-          Add subtitle variant
-        </button>
-      </div>
-
-      {variants.length === 0 && (
-        <p className="text-sm text-gray-500">No subtitle variants added.</p>
-      )}
-
-      {variants.map((variant, index) => {
-        const options =
-          variationPoints.find(
-            (event) => event.variationId === variant.variationId,
-          )?.options || [];
-
-        return (
-          <div
-            key={variant.draftId}
-            className="space-y-3 rounded-lg border border-white/10 bg-[#202020] p-4"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium">
-                Subtitle variant {index + 1}
-              </h3>
-              <button
-                type="button"
-                onClick={() =>
-                  onChange((previous) =>
-                    previous.filter(
-                      (item) => item.draftId !== variant.draftId,
-                    ),
-                  )
-                }
-                className="text-sm text-red-400 hover:text-red-300"
-              >
-                Remove
-              </button>
+    <motion.section
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+    >
+      <Card className="border-white/10 bg-[#181818] text-white shadow-xl shadow-black/20">
+        <CardHeader className="border-b border-white/5 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600/15 text-red-500">
+                <Captions size={18} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold">
+                  Subtitle / Localization Variants
+                </h2>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  Upload pre-authored WebVTT files. Subtitle content is never
+                  generated or changed by AI.
+                </p>
+              </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs text-gray-400">
-                Locale *
-                <input
-                  value={variant.locale}
-                  onChange={(event) =>
-                    updateVariant(variant.draftId, {
-                      locale: event.target.value,
-                    })
-                  }
-                  placeholder="en-US"
-                  className="mt-1 w-full rounded border border-white/10 bg-[#141414] px-3 py-2 text-sm text-white"
-                />
-              </label>
-              <label className="text-xs text-gray-400">
-                Display label *
-                <input
-                  value={variant.label}
-                  onChange={(event) =>
-                    updateVariant(variant.draftId, {
-                      label: event.target.value,
-                    })
-                  }
-                  placeholder="English"
-                  className="mt-1 w-full rounded border border-white/10 bg-[#141414] px-3 py-2 text-sm text-white"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-xs text-gray-400">
-                Timeline event (optional)
-                <select
-                  value={variant.eventId}
-                  onChange={(event) =>
-                    updateVariant(variant.draftId, {
-                      eventId: event.target.value,
-                    })
-                  }
-                  className="mt-1 w-full rounded border border-white/10 bg-[#141414] px-3 py-2 text-sm text-white"
-                >
-                  <option value="">All timeline events</option>
-                  {timeline.map((event) => (
-                    <option key={event.eventId} value={event.eventId}>
-                      {event.eventId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-gray-400">
-                Variation point (optional)
-                <select
-                  value={variant.variationId}
-                  onChange={(event) =>
-                    updateVariant(variant.draftId, {
-                      variationId: event.target.value,
-                      optionId: "",
-                    })
-                  }
-                  className="mt-1 w-full rounded border border-white/10 bg-[#141414] px-3 py-2 text-sm text-white"
-                >
-                  <option value="">All story outcomes</option>
-                  {variationPoints.map((event) => (
-                    <option key={event.variationId} value={event.variationId}>
-                      {event.variationId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-gray-400">
-                Variation option
-                <select
-                  value={variant.optionId}
-                  onChange={(event) =>
-                    updateVariant(variant.draftId, {
-                      optionId: event.target.value,
-                    })
-                  }
-                  disabled={!variant.variationId}
-                  className="mt-1 w-full rounded border border-white/10 bg-[#141414] px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  <option value="">Choose an option</option>
-                  {options.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <label className="block text-xs text-gray-400">
-              WebVTT file {variant.variantId && "(optional replacement)"}
-              <input
-                type="file"
-                accept=".vtt,text/vtt"
-                onChange={(event) =>
-                  updateVariant(variant.draftId, {
-                    file: event.target.files?.[0] || null,
-                  })
-                }
-                className="mt-1 block w-full rounded border border-white/10 bg-[#141414] p-2 text-sm text-white"
-              />
-              <span className="mt-1 block text-gray-500">
-                {variant.file?.name ||
-                  (variant.variantId
-                    ? "Existing subtitle file retained"
-                    : "Required for a new variant; maximum 5 MB")}
-              </span>
-            </label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onChange((previous) => [...previous, createDraft()])
+              }
+              className="gap-1.5 border-white/15 bg-transparent text-white hover:bg-white/10 hover:text-white"
+            >
+              <Plus size={15} />
+              Add subtitle variant
+            </Button>
           </div>
-        );
-      })}
-    </section>
+        </CardHeader>
+
+        <CardContent className="space-y-4 p-5">
+          {variants.length === 0 && (
+            <div className="rounded-lg border border-dashed border-white/15 p-6 text-center text-sm text-zinc-500">
+              No subtitle variants added.
+            </div>
+          )}
+
+          <AnimatePresence initial={false}>
+            {variants.map((variant, index) => {
+              const options =
+                variationPoints.find(
+                  (event) => event.variationId === variant.variationId,
+                )?.options || [];
+
+              return (
+                <motion.div
+                  key={variant.draftId}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ duration: 0.25 }}
+                  className="space-y-4 rounded-xl border border-white/10 bg-[#141414] p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="flex items-center gap-2 text-sm font-medium">
+                      Subtitle variant {index + 1}
+                      {variant.variantId && (
+                        <Badge
+                          variant="outline"
+                          className="border-white/15 text-[10px] text-zinc-400"
+                        >
+                          Saved
+                        </Badge>
+                      )}
+                    </h3>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        onChange((previous) =>
+                          previous.filter(
+                            (item) => item.draftId !== variant.draftId,
+                          ),
+                        )
+                      }
+                      className="gap-1.5 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      <Trash2 size={14} />
+                      Remove
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      compact
+                      label="Locale"
+                      required
+                      htmlFor={`${variant.draftId}-locale`}
+                    >
+                      <Input
+                        id={`${variant.draftId}-locale`}
+                        value={variant.locale}
+                        onChange={(event) =>
+                          updateVariant(variant.draftId, {
+                            locale: event.target.value,
+                          })
+                        }
+                        placeholder="en-US"
+                        className={fieldClass}
+                      />
+                    </Field>
+
+                    <Field
+                      compact
+                      label="Display label"
+                      required
+                      htmlFor={`${variant.draftId}-label`}
+                    >
+                      <Input
+                        id={`${variant.draftId}-label`}
+                        value={variant.label}
+                        onChange={(event) =>
+                          updateVariant(variant.draftId, {
+                            label: event.target.value,
+                          })
+                        }
+                        placeholder="English"
+                        className={fieldClass}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Field
+                      compact
+                      label="Timeline event (optional)"
+                      htmlFor={`${variant.draftId}-event`}
+                    >
+                      <select
+                        id={`${variant.draftId}-event`}
+                        value={variant.eventId}
+                        onChange={(event) =>
+                          updateVariant(variant.draftId, {
+                            eventId: event.target.value,
+                          })
+                        }
+                        className={selectClass}
+                      >
+                        <option value="">All timeline events</option>
+                        {timeline.map((event) => (
+                          <option key={event.eventId} value={event.eventId}>
+                            {event.eventId}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <Field
+                      compact
+                      label="Variation point (optional)"
+                      htmlFor={`${variant.draftId}-variation`}
+                    >
+                      <select
+                        id={`${variant.draftId}-variation`}
+                        value={variant.variationId}
+                        onChange={(event) =>
+                          updateVariant(variant.draftId, {
+                            variationId: event.target.value,
+                            optionId: "",
+                          })
+                        }
+                        className={selectClass}
+                      >
+                        <option value="">All story outcomes</option>
+                        {variationPoints.map((event) => (
+                          <option
+                            key={event.variationId}
+                            value={event.variationId}
+                          >
+                            {event.variationId}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <Field
+                      compact
+                      label="Variation option"
+                      htmlFor={`${variant.draftId}-option`}
+                      className="sm:col-span-2 lg:col-span-1"
+                    >
+                      <select
+                        id={`${variant.draftId}-option`}
+                        value={variant.optionId}
+                        onChange={(event) =>
+                          updateVariant(variant.draftId, {
+                            optionId: event.target.value,
+                          })
+                        }
+                        disabled={!variant.variationId}
+                        className={selectClass}
+                      >
+                        <option value="">Choose an option</option>
+                        {options.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+
+                  <Field
+                    compact
+                    label={`WebVTT file ${variant.variantId ? "(optional replacement)" : ""}`}
+                    htmlFor={`${variant.draftId}-file`}
+                    hint={
+                      variant.file?.name ||
+                      (variant.variantId
+                        ? "Existing subtitle file retained"
+                        : "Required for a new variant; maximum 5 MB")
+                    }
+                  >
+                    <Input
+                      id={`${variant.draftId}-file`}
+                      type="file"
+                      accept=".vtt,text/vtt"
+                      onChange={(event) =>
+                        updateVariant(variant.draftId, {
+                          file: event.target.files?.[0] || null,
+                        })
+                      }
+                      className={fileClass}
+                    />
+                  </Field>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </CardContent>
+      </Card>
+    </motion.section>
   );
 };
 

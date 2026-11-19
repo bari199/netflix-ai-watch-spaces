@@ -18,6 +18,7 @@ import QuickRejoinRooms from "./components/watchspace/QuickRejoinRooms";
 
 import Navbar from "./components/layout/Navbar.jsx";
 import HeroSection from "./components/layout/HeroSection.jsx";
+import Footer from "./components/layout/Footer.jsx";
 
 function HomePage() {
   const { user } = useAuth();
@@ -43,13 +44,9 @@ function HomePage() {
           </section>
         </div>
       )}
-
-      <footer className="border-t border-white/[0.06] px-5 py-8 text-center text-sm text-zinc-500">
-        <p>
-          © {new Date().getFullYear()} Netflix AI Watch Spaces. Built for
-          watching together.
-        </p>
-      </footer>
+      <section>
+        <Footer />
+      </section>
     </main>
   );
 }
