@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Info, Users, GitBranch, Sparkles, MessageCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 import {
@@ -19,14 +20,25 @@ import {
   disconnectSocket,
 } from "../../services/socket.service.js";
 
+import WatchRoomNavbar from "../../components/watchspace/layout/WatchRoomNavbar.jsx";
+import RoomHero from "../../components/watchspace/room/RoomHero.jsx";
+import RoomDetailsPanel from "../../components/watchspace/room/RoomDetailsPanel.jsx";
+import CinematicPlayer from "../../components/watchspace/player/CinematicPlayer.jsx";
+import ParticipantsPanel from "../../components/watchspace/participants/ParticipantsPanel.jsx";
+import LiveChat from "../../components/watchspace/chat/LiveChat.jsx";
+import AICopilot from "../../components/watchspace/ai/AICopilot.jsx";
+import GroupStoryVote from "../../components/watchspace/voting/GroupStoryVote.jsx";
+import TriviaNotification from "../../components/watchspace/common/TriviaNotification.jsx";
+import ErrorAlert from "../../components/watchspace/common/ErrorAlert.jsx";
+import HostDisconnectedAlert from "../../components/watchspace/common/HostDisconnectedAlert.jsx";
+import LoadingScreen from "../../components/watchspace/common/LoadingScreen.jsx";
+
 // Configure VITE_API_BASE_URL in the frontend .env file.
 // The relative fallback avoids hardcoding a local development host.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
   /\/+$/,
   "",
 );
-
-const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "👏"];
 
 const WatchPageDetails = () => {
   const navigate = useNavigate();
@@ -65,13 +77,15 @@ const WatchPageDetails = () => {
   const [voteLoading, setVoteLoading] = useState(false);
   const [triviaCards, setTriviaCards] = useState([]);
   const [subtitleSelection, setSubtitleSelection] = useState(null);
+  const [playerStarted, setPlayerStarted] = useState(false);
+  const [activeSidebarTab, setActiveSidebarTab] = useState("chat");
 
   const videoRef = useRef(null);
+  const chatMessagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const aiSubmittingRef = useRef(false);
   const seenTriviaEventIdsRef = useRef(new Set());
   const applyingRemoteUpdateRef = useRef(false);
-  const chatMessagesEndRef = useRef(null);
   const qualityIntervalRef = useRef(null);
   const fetchRequestIdRef = useRef(0);
 
@@ -148,6 +162,8 @@ const WatchPageDetails = () => {
     setVoteMessage("");
     setTriviaCards([]);
     setSubtitleSelection(null);
+    setPlayerStarted(false);
+    setActiveSidebarTab("chat");
 
     seenTriviaEventIdsRef.current.clear();
   }, [watchSpaceId]);
@@ -346,12 +362,6 @@ const WatchPageDetails = () => {
           : "disabled";
     });
   }, [subtitleVariants, selectedSubtitle?.variantId]);
-
-  useEffect(() => {
-    chatMessagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [chatMessages, typingUsers]);
 
   // Socket Connection, Chat, Presence and Playback Sync
   useEffect(() => {
@@ -1293,11 +1303,7 @@ const WatchPageDetails = () => {
 
   // Loading
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#141414] text-gray-400">
-        Loading WatchSpace...
-      </div>
-    );
+    return <LoadingScreen message="Loading your WatchSpace..." />;
   }
 
   // Not Found
@@ -1327,6 +1333,8 @@ const WatchPageDetails = () => {
     watchSpace.host?.name || watchSpace.host?.fullName || "Unknown";
 
   const currentPlaybackState = watchSpace.playback?.state || "paused";
+  const isPlayerVisible =
+    playerStarted || currentPlaybackState === "playing" || playbackPosition > 0;
 
   const variationPoints = Array.isArray(title?.timeline)
     ? title.timeline.filter(
@@ -1338,952 +1346,262 @@ const WatchPageDetails = () => {
       )
     : [];
 
+  const sidebarTabs = [
+    { id: "chat", label: "Chat", icon: MessageCircle },
+    { id: "room", label: "Room", icon: Info },
+    { id: "participants", label: "People", icon: Users },
+    { id: "vote", label: "Vote", icon: GitBranch },
+    { id: "ai", label: "AI Co-Pilot", icon: Sparkles },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#141414] text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-[#101010]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5">
-          <Link to="/watch-spaces" className="text-xl font-bold text-red-600">
-            NETFLIX <span className="text-white">WATCH SPACES</span>
-          </Link>
+    <div className="min-h-screen bg-[#080808] text-white">
+      <WatchRoomNavbar user={user} />
 
-          <div className="text-sm text-gray-400">
-            {user?.name || user?.fullName || "User"}
-          </div>
+      <main className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-7">
+        <div className="mb-3 space-y-2">
+          <ErrorAlert error={error} onDismiss={() => setError("")} />
+          <HostDisconnectedAlert hostDisconnected={hostDisconnected} />
+          <TriviaNotification
+            triviaCards={triviaCards}
+            watchSpaceId={watchSpaceId}
+            setTriviaCards={setTriviaCards}
+          />
         </div>
-      </header>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-5 py-10">
-        <Link
-          to="/watch-spaces"
-          className="inline-block text-sm text-gray-400 transition hover:text-white"
-        >
-          ← Back to WatchSpaces
-        </Link>
-
-        {hostDisconnected && (
-          <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
-            Host disconnected. Playback has been paused for everyone.
-          </div>
-        )}
-
-        {triviaCards
-          .filter((card) => card.watchSpaceId === watchSpaceId)
-          .map((triviaCard) => (
-            <div
-              key={triviaCard.eventId}
-              className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100"
-            >
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">
-                  Trivia moment
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setTriviaCards((previous) =>
-                      previous.filter(
-                        (card) => card.eventId !== triviaCard.eventId,
-                      ),
-                    )
+        <section className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]">
+          {/* Main column: cinematic player */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="min-w-0 overflow-hidden rounded-2xl">
+              {isPlayerVisible ? (
+                <CinematicPlayer
+                  videoRef={videoRef}
+                  videoUrl={videoUrl}
+                  thumbnailUrl={thumbnailUrl}
+                  titleId={titleId}
+                  title={title}
+                  isHost={isHost}
+                  subtitleVariants={subtitleVariants}
+                  selectedSubtitle={selectedSubtitle}
+                  onSubtitleChange={(variantId) =>
+                    setSubtitleSelection({ watchSpaceId, variantId })
                   }
-                  className="text-xs text-amber-200 hover:text-white"
-                >
-                  Dismiss
-                </button>
-              </div>
-
-              <p className="text-base leading-relaxed">{triviaCard.text}</p>
-            </div>
-          ))}
-
-        {error && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        {/* Movie Player and WatchSpace Details */}
-        <section className="grid gap-8 lg:grid-cols-[1.5fr_1fr]">
-          {/* Video Player */}
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-[#181818]">
-            <div className="aspect-video bg-black">
-              {videoUrl ? (
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  poster={thumbnailUrl}
-                  controls={isHost}
-                  playsInline
-                  preload="metadata"
-                  onPlay={() => emitPlaybackControl("play")}
+                  onPlay={() => {
+                    setPlayerStarted(true);
+                    emitPlaybackControl("play");
+                  }}
                   onPause={() => emitPlaybackControl("pause")}
                   onSeeked={() => emitPlaybackControl("seek")}
-                  className="h-full w-full object-contain"
-                >
-                  {subtitleVariants.map((variant) => (
-                    <track
-                      key={variant.variantId}
-                      kind="subtitles"
-                      srcLang={variant.locale}
-                      label={variant.label}
-                      src={`${API_BASE_URL}/titles/${titleId}/subtitle-variants/${variant.variantId}`}
-                      default={
-                        variant.variantId === selectedSubtitle?.variantId
-                      }
-                    />
-                  ))}
-                  Your browser does not support HTML5 video.
-                </video>
+                />
               ) : (
-                <div className="flex h-full items-center justify-center text-gray-500">
-                  Video Not Available
-                </div>
+                <RoomHero
+                  watchSpace={watchSpace}
+                  title={title}
+                  hostName={hostName}
+                  participantCount={participants.length}
+                  isEnded={isEnded}
+                  isPlaying={false}
+                  onPlay={
+                    isHost
+                      ? () => {
+                          setPlayerStarted(true);
+                          requestAnimationFrame(() => {
+                            const video = videoRef.current;
+                            video?.play().catch((playError) => {
+                              console.error(
+                                "Video playback failed:",
+                                playError,
+                              );
+                            });
+                          });
+                        }
+                      : undefined
+                  }
+                />
               )}
-            </div>
-
-            <div className="space-y-4 p-6">
-              {subtitleVariants.length > 0 && (
-                <label className="flex items-center gap-3 text-sm text-gray-300">
-                  Subtitles
-                  <select
-                    value={selectedSubtitle?.variantId || "off"}
-                    onChange={(event) =>
-                      setSubtitleSelection({
-                        watchSpaceId,
-                        variantId: event.target.value,
-                      })
-                    }
-                    className="rounded border border-white/10 bg-[#141414] px-3 py-2 text-white"
-                  >
-                    <option value="off">Off</option>
-                    {subtitleVariants.map((variant) => (
-                      <option key={variant.variantId} value={variant.variantId}>
-                        {variant.label} ({variant.locale})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <div>
-                <h1 className="text-2xl font-bold">
-                  {title?.name || "Untitled Movie"}
-                </h1>
-
-                <p className="mt-2 text-sm text-gray-400">
-                  {title?.description || "No description available."}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-3 text-sm text-gray-400">
-                {title?.releaseYear && <span>{title.releaseYear}</span>}
-
-                {title?.duration && <span>{title.duration} min</span>}
-
-                {title?.genre && (
-                  <span>
-                    {Array.isArray(title.genre)
-                      ? title.genre.join(", ")
-                      : title.genre}
-                  </span>
-                )}
-              </div>
             </div>
           </div>
 
-          {/* WatchSpace Details */}
-          <aside className="space-y-5 rounded-xl border border-white/10 bg-[#181818] p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">WatchSpace Details</h2>
-
-              <span
-                className={`rounded-full px-3 py-1 text-xs ${
-                  isEnded
-                    ? "bg-gray-500/10 text-gray-400"
-                    : "bg-green-500/10 text-green-400"
-                }`}
+          {/* Right sidebar: one selected panel at a time */}
+          <aside className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#101010] shadow-2xl shadow-black/30">
+            <div className="border-b border-white/10 p-2">
+              <div
+                role="tablist"
+                aria-label="Watch Space panels"
+                className="grid grid-cols-5 gap-1"
               >
-                {isEnded ? "Ended" : "Live"}
-              </span>
-            </div>
+                {sidebarTabs.map(({ id, label, icon: Icon }) => {
+                  const isActive = activeSidebarTab === id;
 
-            <div>
-              <p className="text-sm text-gray-400">Room Name</p>
-
-              <p className="mt-1 font-medium">
-                {watchSpace.name || title?.name || "WatchSpace"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-400">Host</p>
-
-              <p className="mt-1 font-medium">{hostName}</p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-400">Participants</p>
-
-              <p className="mt-1 font-medium">{participants.length}</p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-400">Room Privacy</p>
-
-              <p className="mt-1 font-medium">
-                {watchSpace.isPrivate ? "Private" : "Public"}
-                {watchSpace.isLocked ? " · Locked" : ""}
-              </p>
-            </div>
-
-            {/* Private WatchSpace Invite Code - Host Only */}
-            {isHost && watchSpace.isPrivate && watchSpace.inviteCode && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
-                <p className="text-sm font-medium text-gray-300">Invite Code</p>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <code className="min-w-0 flex-1 break-all rounded bg-black/40 px-3 py-2 text-lg font-bold tracking-wider text-red-400">
-                    {watchSpace.inviteCode}
-                  </code>
-
-                  <button
-                    type="button"
-                    onClick={handleCopyInviteCode}
-                    className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700"
-                  >
-                    {copiedInviteCode ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCopyInviteLink}
-                  className="mt-3 w-full rounded-lg border border-red-500/40 bg-red-600/10 px-4 py-2.5 text-sm font-semibold text-red-400 transition hover:bg-red-600/20"
-                >
-                  {copiedInviteLink
-                    ? "Invite Link Copied!"
-                    : "Copy Invite Link"}
-                </button>
-
-                <p className="mt-2 text-xs text-gray-500">
-                  Share this code only with people you want to invite.
-                </p>
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      id={`watchspace-tab-${id}`}
+                      aria-selected={isActive}
+                      aria-controls={`watchspace-panel-${id}`}
+                      onClick={() => setActiveSidebarTab(id)}
+                      className={`flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl px-1.5 py-3 text-[10px] font-semibold transition sm:text-[11px] ${
+                        isActive
+                          ? "bg-red-600/15 text-red-400 ring-1 ring-inset ring-red-500/25"
+                          : "text-white/45 hover:bg-white/[0.06] hover:text-white/85"
+                      }`}
+                    >
+                      <Icon size={17} />
+                      <span className="truncate">{label}</span>
+                    </button>
+                  );
+                })}
               </div>
-            )}
-
-            <div>
-              <p className="text-sm text-gray-400">Playback</p>
-
-              <p className="mt-1 font-medium capitalize">
-                {currentPlaybackState}
-              </p>
             </div>
 
-            {/* Connection Quality */}
-            <div>
-              <p className="text-sm text-gray-400">Connection Quality</p>
+            <div
+              id={`watchspace-panel-${activeSidebarTab}`}
+              role="tabpanel"
+              aria-labelledby={`watchspace-tab-${activeSidebarTab}`}
+              className="min-w-0 p-3 sm:p-4"
+            >
+              {activeSidebarTab === "chat" &&
+                (isParticipant && !isEnded ? (
+                  <LiveChat
+                    chatMessages={chatMessages}
+                    currentUserId={currentUserId}
+                    getUserId={getUserId}
+                    handleChatReaction={handleChatReaction}
+                    typingUsers={typingUsers}
+                    chatInput={chatInput}
+                    handleChatInputChange={handleChatInputChange}
+                    handleChatInputBlur={handleChatInputBlur}
+                    handleSendMessage={handleSendMessage}
+                    isSendingMessage={isSendingMessage}
+                    chatMessagesEndRef={chatMessagesEndRef}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center">
+                    <MessageCircle
+                      className="mx-auto mb-2 text-white/30"
+                      size={22}
+                    />
+                    <p className="text-sm font-semibold text-white/70">
+                      {isEnded
+                        ? "This Watch Space has ended"
+                        : "Join the room to chat"}
+                    </p>
+                    <p className="mt-1 text-xs text-white/40">
+                      Live conversation and reactions are available to room
+                      participants.
+                    </p>
+                  </div>
+                ))}
 
-              <p
-                className={`mt-1 font-medium ${
-                  connectionQuality === "good"
-                    ? "text-green-400"
-                    : connectionQuality === "fair"
-                      ? "text-yellow-400"
-                      : connectionQuality === "poor" ||
-                          connectionQuality === "offline"
-                        ? "text-red-400"
-                        : "text-gray-400"
-                }`}
-              >
-                {connectionQuality === "checking"
-                  ? "Checking..."
-                  : connectionQuality === "good"
-                    ? "Good"
-                    : connectionQuality === "fair"
-                      ? "Fair"
-                      : connectionQuality === "poor"
-                        ? "Poor"
-                        : "Offline"}
-
-                {connectionLatency !== null && ` · ${connectionLatency} ms`}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3 pt-3">
-              {!isParticipant && !isEnded && (
-                <button
-                  onClick={handleJoin}
-                  disabled={actionLoading}
-                  className="rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
-                >
-                  {actionLoading ? "Please wait..." : "Join Room"}
-                </button>
+              {activeSidebarTab === "room" && (
+                <RoomDetailsPanel
+                  watchSpace={watchSpace}
+                  title={title}
+                  hostName={hostName}
+                  participantCount={participants.length}
+                  currentPlaybackState={currentPlaybackState}
+                  isEnded={isEnded}
+                  isHost={isHost}
+                  isParticipant={isParticipant}
+                  actionLoading={actionLoading}
+                  connectionQuality={connectionQuality}
+                  connectionLatency={connectionLatency}
+                  copiedInviteCode={copiedInviteCode}
+                  copiedInviteLink={copiedInviteLink}
+                  onCopyInviteCode={handleCopyInviteCode}
+                  onCopyInviteLink={handleCopyInviteLink}
+                  onJoin={handleJoin}
+                  onLeave={handleLeave}
+                  onToggleLock={handleToggleLock}
+                  onEnd={handleEnd}
+                />
               )}
 
-              {isParticipant && !isHost && !isEnded && (
-                <button
-                  onClick={handleLeave}
-                  disabled={actionLoading}
-                  className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold hover:bg-white/20 disabled:opacity-50"
-                >
-                  Leave Room
-                </button>
+              {activeSidebarTab === "participants" && (
+                <ParticipantsPanel
+                  participants={participants}
+                  onlineParticipants={onlineParticipants}
+                  hostId={hostId}
+                  isHost={isHost}
+                  isEnded={isEnded}
+                  loading={loading}
+                  actionLoading={actionLoading}
+                  getUserId={getUserId}
+                  onRefresh={fetchWatchSpace}
+                  onMute={handleMute}
+                  onTransferHost={handleTransferHost}
+                  onRemove={handleRemove}
+                />
               )}
 
-              {isHost && !isEnded && (
-                <>
-                  <button
-                    onClick={handleToggleLock}
-                    disabled={actionLoading}
-                    className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold hover:bg-white/20 disabled:opacity-50"
-                  >
-                    {watchSpace.isLocked ? "Unlock Room" : "Lock Room"}
-                  </button>
+              {activeSidebarTab === "vote" &&
+                (isParticipant && !isEnded ? (
+                  <GroupStoryVote
+                    isParticipant={isParticipant}
+                    isHost={isHost}
+                    isEnded={isEnded}
+                    votingEnabled={Boolean(watchSpace.votingEnabled)}
+                    activeVote={activeVote}
+                    voteSecondsLeft={voteSecondsLeft}
+                    variationPoints={variationPoints}
+                    selectedVariationId={selectedVariationId}
+                    setSelectedVariationId={setSelectedVariationId}
+                    voteDuration={voteDuration}
+                    setVoteDuration={setVoteDuration}
+                    handleStartVote={handleStartVote}
+                    handleCastVote={handleCastVote}
+                    selectedVoteOption={selectedVoteOption}
+                    voteLoading={voteLoading}
+                    voteMessage={voteMessage}
+                    voteResult={voteResult}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center">
+                    <GitBranch
+                      className="mx-auto mb-2 text-white/30"
+                      size={22}
+                    />
+                    <p className="text-sm font-semibold text-white/70">
+                      Group voting unavailable
+                    </p>
+                    <p className="mt-1 text-xs text-white/40">
+                      Join an active Watch Space to participate in story votes.
+                    </p>
+                  </div>
+                ))}
 
-                  <button
-                    onClick={handleEnd}
-                    disabled={actionLoading}
-                    className="rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
-                  >
-                    End WatchSpace
-                  </button>
-                </>
-              )}
+              {activeSidebarTab === "ai" &&
+                ((isHost || isParticipant) && !isEnded ? (
+                  <AICopilot
+                    aiSuggestedQuestions={aiSuggestedQuestions}
+                    aiQuestion={aiQuestion}
+                    setAiQuestion={setAiQuestion}
+                    handleAskAI={handleAskAI}
+                    isAskingAI={isAskingAI}
+                    currentAiError={currentAiError}
+                    currentAiResponse={currentAiResponse}
+                    aiSourceEvents={aiSourceEvents}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center">
+                    <Sparkles
+                      className="mx-auto mb-2 text-white/30"
+                      size={22}
+                    />
+                    <p className="text-sm font-semibold text-white/70">
+                      AI Co-Pilot unavailable
+                    </p>
+                    <p className="mt-1 text-xs text-white/40">
+                      Join an active Watch Space to ask questions about the
+                      movie timeline.
+                    </p>
+                  </div>
+                ))}
             </div>
           </aside>
         </section>
-
-        {/* Narrative Variation Voting */}
-        {isParticipant && !isEnded && watchSpace.votingEnabled && (
-          <section className="rounded-xl border border-white/10 bg-[#181818] p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">Group Story Vote</h2>
-                <p className="mt-1 text-sm text-gray-400">
-                  Choose between pre-approved story variations.
-                </p>
-              </div>
-
-              {activeVote?.status === "open" && (
-                <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
-                  Voting open · {voteSecondsLeft}s left
-                </span>
-              )}
-              {activeVote?.status === "closed" && (
-                <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-300">
-                  Vote closed
-                </span>
-              )}
-              {activeVote?.status === "applied" && (
-                <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-300">
-                  Variation applied
-                </span>
-              )}
-            </div>
-            {isHost &&
-              !activeVote?.status?.match(/open/) &&
-              variationPoints.length > 0 && (
-                <div className="mb-6 rounded-lg border border-white/10 bg-[#202020] p-4">
-                  <h3 className="mb-3 font-medium">Start a group vote</h3>
-
-                  <div className="grid gap-3 sm:grid-cols-[1fr_150px_auto]">
-                    <select
-                      value={selectedVariationId}
-                      onChange={(event) =>
-                        setSelectedVariationId(event.target.value)
-                      }
-                      className="min-w-0 rounded-lg border border-white/10 bg-[#141414] px-3 py-3 text-sm text-white outline-none focus:border-red-500"
-                    >
-                      <option value="">Select a story variation</option>
-                      {variationPoints.map((point) => (
-                        <option
-                          key={point.variationId}
-                          value={point.variationId}
-                        >
-                          {point.description || point.variationId}
-                        </option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={voteDuration}
-                      onChange={(event) =>
-                        setVoteDuration(Number(event.target.value))
-                      }
-                      className="rounded-lg border border-white/10 bg-[#141414] px-3 py-3 text-sm text-white outline-none focus:border-red-500"
-                    >
-                      <option value={15}>15 seconds</option>
-                      <option value={30}>30 seconds</option>
-                      <option value={45}>45 seconds</option>
-                      <option value={60}>60 seconds</option>
-                      <option value={90}>90 seconds</option>
-                      <option value={120}>120 seconds</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      onClick={handleStartVote}
-                      disabled={
-                        voteLoading ||
-                        !selectedVariationId ||
-                        activeVote?.status === "open"
-                      }
-                      className="rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {voteLoading ? "Please wait..." : "Start Vote"}
-                    </button>
-                  </div>
-
-                  {variationPoints.length === 0 && (
-                    <p className="mt-2 text-sm text-gray-400">
-                      No pre-authored variation points are available for this
-                      title.
-                    </p>
-                  )}
-                </div>
-              )}
-            {activeVote?.options?.length > 0 ? (
-              <>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-gray-400">
-                      Variation:{" "}
-                      <span className="font-medium text-white">
-                        {variationPoints
-                          .find(
-                            (point) =>
-                              String(point.variationId) ===
-                              String(activeVote.variationId),
-                          )
-                          ?.description?.trim() || "Story variation"}
-                      </span>
-                    </p>
-
-                    {activeVote.status === "open" && (
-                      <p className="mt-1 text-sm text-gray-400">
-                        Select an option below. You can change your vote before
-                        time runs out.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {activeVote.options.map((option) => {
-                    const isSelected = selectedVoteOption === option.id;
-                    const isWinner = activeVote.winningOptionId === option.id;
-                    const voteCount = activeVote.voteCounts?.[option.id];
-
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => handleCastVote(option.id)}
-                        disabled={
-                          activeVote.status !== "open" ||
-                          voteLoading ||
-                          !isParticipant
-                        }
-                        className={`rounded-lg border p-4 text-left transition disabled:cursor-not-allowed ${
-                          isSelected
-                            ? "border-red-500 bg-red-500/10"
-                            : isWinner
-                              ? "border-green-500 bg-green-500/10"
-                              : "border-white/10 bg-[#202020] hover:border-white/30"
-                        }`}
-                      >
-                        <span className="flex items-center justify-between gap-3">
-                          <span className="font-medium">{option.label}</span>
-                          {isSelected && (
-                            <span className="text-xs text-red-400">
-                              Your vote
-                            </span>
-                          )}
-                          {isWinner && (
-                            <span className="text-xs text-green-400">
-                              Winner
-                            </span>
-                          )}
-                        </span>
-                        {activeVote.status !== "open" && (
-                          <span className="mt-2 block text-xs text-gray-400">
-                            {voteCount ?? 0} vote(s)
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-gray-400">
-                No active group vote. The Host can start one when a variation
-                point is available.
-              </p>
-            )}
-            {voteMessage && (
-              <p className="mt-4 text-sm text-gray-300" role="status">
-                {voteMessage}
-              </p>
-            )}
-            {voteResult?.winningOptionId && (
-              <p className="mt-3 text-sm text-green-400">
-                Winning option:{" "}
-                {activeVote?.options?.find(
-                  (option) => option.id === voteResult.winningOptionId,
-                )?.label || voteResult.winningOptionId}
-                {Number.isFinite(Number(voteResult.applyAtSeconds)) &&
-                  ` · Scheduled point: ${Math.floor(voteResult.applyAtSeconds)}s`}
-              </p>
-            )}
-            {activeVote?.status === "applied" && (
-              <p className="mt-2 text-sm text-blue-300">
-                The selected variation has been marked as applied for this
-                WatchSpace.
-              </p>
-            )}
-          </section>
-        )}
-
-        {/* Participants */}
-        <section className="rounded-xl border border-white/10 bg-[#181818] p-6">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">
-              Participants ({participants.length})
-            </h2>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-green-400">
-                {onlineParticipants.length} Online
-              </span>
-
-              <button
-                onClick={fetchWatchSpace}
-                disabled={loading || actionLoading}
-                className="text-sm text-red-400 hover:text-red-300 disabled:opacity-50"
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
-
-          {participants.length === 0 ? (
-            <p className="text-sm text-gray-400">No participants found.</p>
-          ) : (
-            <div className="space-y-3">
-              {participants.map((participant, index) => {
-                const participantUser = participant.user;
-
-                const participantId = getUserId(participantUser);
-
-                const participantIsHost =
-                  participant.role === "host" || participantId === hostId;
-
-                // Check Online Status
-                const isOnline = onlineParticipants.some(
-                  (onlineParticipant) =>
-                    getUserId(onlineParticipant?.user || onlineParticipant) ===
-                    participantId,
-                );
-
-                const participantName =
-                  participantUser?.name ||
-                  participantUser?.fullName ||
-                  "Unknown User";
-
-                const avatar =
-                  participantUser?.avatar || participantUser?.avatarUrl;
-
-                return (
-                  <div
-                    key={participantId || index}
-                    className="flex flex-col justify-between gap-4 rounded-lg border border-white/10 bg-[#202020] p-4 sm:flex-row sm:items-center"
-                  >
-                    <div className="flex items-center gap-3">
-                      {avatar ? (
-                        <img
-                          src={avatar}
-                          alt={participantName}
-                          className="h-11 w-11 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-600 font-bold">
-                          {participantName.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-
-                      <div>
-                        <p className="font-medium">{participantName}</p>
-
-                        {/* Role, Online Status and Mute Status */}
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <span className="text-gray-400">
-                            {participantIsHost ? "Host" : "Viewer"}
-                          </span>
-
-                          <span
-                            className={`flex items-center gap-1 ${
-                              isOnline ? "text-green-400" : "text-gray-500"
-                            }`}
-                          >
-                            <span
-                              className={`h-2 w-2 rounded-full ${
-                                isOnline ? "bg-green-400" : "bg-gray-500"
-                              }`}
-                            />
-
-                            {isOnline ? "Online" : "Offline"}
-                          </span>
-
-                          {participant.isMuted && (
-                            <span className="text-gray-400">Muted</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Host Participant Actions */}
-                    {isHost &&
-                      !participantIsHost &&
-                      !isEnded &&
-                      participantId && (
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => handleMute(participant)}
-                            disabled={actionLoading}
-                            className="rounded-md bg-white/10 px-3 py-2 text-xs hover:bg-white/20 disabled:opacity-50"
-                          >
-                            {participant.isMuted ? "Unmute" : "Mute"}
-                          </button>
-
-                          <button
-                            onClick={() => handleTransferHost(participant)}
-                            disabled={actionLoading}
-                            className="rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-400 hover:bg-blue-500/20 disabled:opacity-50"
-                          >
-                            Transfer Host
-                          </button>
-
-                          <button
-                            onClick={() => handleRemove(participant)}
-                            disabled={actionLoading}
-                            className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* AI Co-Pilot */}
-        {(isHost || isParticipant) && !isEnded && (
-          <section className="rounded-xl border border-white/10 bg-[#181818] p-5 sm:p-6">
-            <div className="mb-5">
-              <h2 className="text-xl font-semibold">AI Co-Pilot</h2>
-              <p className="mt-1 text-sm text-gray-400">
-                Ask about the story up to the current playback moment. Answers
-                are grounded in this title&apos;s timeline metadata.
-              </p>
-            </div>
-
-            {aiSuggestedQuestions.length > 0 && (
-              <div className="mb-5">
-                <h3 className="mb-3 text-sm font-medium text-gray-300">
-                  Suggested Questions
-                </h3>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {aiSuggestedQuestions.map((item) => (
-                    <button
-                      key={item.type}
-                      type="button"
-                      onClick={() => setAiQuestion(item.question)}
-                      disabled={isAskingAI}
-                      className={`rounded-lg border p-4 text-left transition-colors ${
-                        aiQuestion === item.question
-                          ? "border-red-500 bg-red-500/10"
-                          : "border-white/10 bg-[#252525] hover:border-red-500/50"
-                      } disabled:cursor-not-allowed disabled:opacity-50`}
-                    >
-                      <span className="mb-2 block text-2xl">{item.icon}</span>
-
-                      <span className="block text-sm font-semibold text-white">
-                        {item.label}
-                      </span>
-
-                      <span className="mt-1 block text-xs text-gray-400">
-                        {item.description}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <form
-              onSubmit={handleAskAI}
-              className="flex flex-col gap-3 sm:flex-row"
-            >
-              <label className="sr-only" htmlFor="ai-copilot-question">
-                Ask a question about this title
-              </label>
-              <input
-                id="ai-copilot-question"
-                type="text"
-                value={aiQuestion}
-                onChange={(event) => setAiQuestion(event.target.value)}
-                maxLength={1000}
-                placeholder="Ask a question about what has happened so far..."
-                disabled={isAskingAI}
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#252525] px-4 py-3 text-sm text-white outline-none focus:border-red-500 disabled:opacity-60"
-              />
-              <button
-                type="submit"
-                disabled={!aiQuestion.trim() || isAskingAI}
-                className="rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:self-stretch"
-              >
-                {isAskingAI ? "Thinking..." : "Send"}
-              </button>
-            </form>
-
-            {currentAiError && (
-              <p
-                className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
-                role="alert"
-              >
-                {currentAiError}
-              </p>
-            )}
-
-            {isAskingAI && (
-              <p className="mt-4 text-sm text-gray-400" role="status">
-                Checking the title timeline...
-              </p>
-            )}
-
-            {!currentAiResponse && !currentAiError && !isAskingAI && (
-              <p className="mt-4 text-sm text-gray-500" aria-live="polite">
-                Your grounded answer will appear here.
-              </p>
-            )}
-
-            {currentAiResponse && (
-              <div className="mt-5 space-y-4" aria-live="polite">
-                <div className="rounded-lg border border-white/10 bg-[#101010] p-4">
-                  <h3 className="mb-2 text-sm font-semibold text-white">
-                    Answer
-                  </h3>
-                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">
-                    {currentAiResponse.answer ||
-                      "No answer was returned for this question."}
-                  </p>
-                </div>
-
-                {aiSourceEvents.length > 0 ? (
-                  <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-300">
-                      Timeline Sources
-                    </h3>
-
-                    <ul className="space-y-3">
-                      {aiSourceEvents.map(
-                        ({ eventId, timelineEvent }, index) => {
-                          const eventText =
-                            timelineEvent?.text !== undefined &&
-                            timelineEvent?.text !== null
-                              ? timelineEvent.text
-                              : timelineEvent?.description;
-
-                          return (
-                            <li
-                              key={`${String(eventId)}-${index}`}
-                              className="rounded-lg border border-white/10 bg-[#202020] p-4"
-                            >
-                              <div className="mb-2 flex items-center gap-2">
-                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600/15 text-xs font-bold text-red-400">
-                                  {index + 1}
-                                </span>
-
-                                <p className="text-xs font-semibold uppercase tracking-wider text-red-400">
-                                  Source {index + 1}
-                                </p>
-                              </div>
-
-                              {typeof eventText === "string" &&
-                              eventText.trim() ? (
-                                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-300">
-                                  {eventText}
-                                </p>
-                              ) : (
-                                <p className="text-sm italic text-gray-500">
-                                  Timeline description is unavailable.
-                                </p>
-                              )}
-                            </li>
-                          );
-                        },
-                      )}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
-                    No supporting timeline events were returned.
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* WatchSpace Live Chat */}
-        {isParticipant && !isEnded && (
-          <section className="rounded-xl border border-white/10 bg-[#181818] p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Live Chat</h2>
-
-                <p className="mt-1 text-sm text-gray-400">
-                  Chat with everyone watching together
-                </p>
-              </div>
-
-              <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-400">
-                Live
-              </span>
-            </div>
-
-            {/* Messages */}
-            <div className="mb-4 flex max-h-[420px] min-h-[200px] flex-col gap-4 overflow-y-auto rounded-lg bg-[#101010] p-4">
-              {chatMessages.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
-                  No messages yet. Start the conversation!
-                </div>
-              ) : (
-                chatMessages.map((message, index) => {
-                  const sender = message.sender || message.user;
-
-                  const senderId = getUserId(sender);
-
-                  const senderName =
-                    sender?.name || sender?.fullName || "Unknown User";
-
-                  const messageText =
-                    message.message || message.content || message.text || "";
-
-                  const reactions = Array.isArray(message.reactions)
-                    ? message.reactions
-                    : [];
-
-                  return (
-                    <div
-                      key={message._id || index}
-                      className="flex flex-col gap-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white">
-                          {senderId === currentUserId ? "You" : senderName}
-                        </span>
-
-                        <span className="text-xs text-gray-500">
-                          {message.createdAt
-                            ? new Date(message.createdAt).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                },
-                              )
-                            : ""}
-                        </span>
-                      </div>
-
-                      <p className="break-words text-sm text-gray-300">
-                        {messageText}
-                      </p>
-
-                      {/* Emoji Reactions */}
-                      <div className="flex flex-wrap gap-2">
-                        {REACTION_EMOJIS.map((emoji) => {
-                          const matchingReactions = reactions.filter(
-                            (reaction) => reaction.emoji === emoji,
-                          );
-
-                          const count = matchingReactions.length;
-
-                          const hasReacted = matchingReactions.some(
-                            (reaction) =>
-                              getUserId(reaction.user) === currentUserId,
-                          );
-
-                          return (
-                            <button
-                              key={emoji}
-                              type="button"
-                              onClick={() =>
-                                handleChatReaction(message._id, emoji)
-                              }
-                              disabled={!message._id}
-                              aria-label={`React with ${emoji}`}
-                              className={`rounded-full border px-2 py-1 text-xs transition ${
-                                hasReacted
-                                  ? "border-red-500 bg-red-500/20"
-                                  : "border-white/10 bg-white/5 hover:bg-white/10"
-                              } disabled:cursor-not-allowed disabled:opacity-50`}
-                            >
-                              {emoji} {count > 0 ? count : ""}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-
-              <div ref={chatMessagesEndRef} />
-            </div>
-
-            {/* Typing Indicator */}
-            {typingUsers.length > 0 && (
-              <p className="mb-3 text-xs text-gray-400">
-                {typingUsers
-                  .map(
-                    (typingUser) =>
-                      typingUser.name || typingUser.fullName || "Someone",
-                  )
-                  .join(", ")}{" "}
-                {typingUsers.length === 1 ? "is" : "are"} typing...
-              </p>
-            )}
-
-            {/* Message Input */}
-            <form onSubmit={handleSendMessage} className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={handleChatInputChange}
-                onBlur={handleChatInputBlur}
-                maxLength={2000}
-                placeholder="Type your message..."
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#252525] px-4 py-3 text-sm text-white outline-none focus:border-red-500"
-              />
-
-              <button
-                type="submit"
-                disabled={!chatInput.trim() || isSendingMessage}
-                className="rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSendingMessage ? "Sending..." : "Send"}
-              </button>
-            </form>
-          </section>
-        )}
       </main>
     </div>
   );

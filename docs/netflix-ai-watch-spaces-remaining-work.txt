@@ -1,0 +1,118 @@
+NETFLIX AI WATCH SPACES
+Remaining Work — PRD & GitHub Repository Review
+Review date: 18 November 2026
+Repository: https://github.com/bari199/netflix-ai-watch-spaces
+
+PURPOSE
+This document lists the work that remains based on the reviewed 21-page PRD and the repository files inspected on the review date. Existing implementations should be verified before being changed. Do not rebuild working features or add features outside the PRD.
+
+1. EPIC 1 — REAL-TIME PLAYBACK & CHAT: FINAL VERIFICATION
+- Verify reconnect and playback resynchronization with multiple browser sessions.
+- Verify host-disconnect behavior and that the resulting room state is consistent for all participants.
+- Verify any PRD-required connection-quality indicator in the actual UI.
+- Run end-to-end tests with at least two authenticated browser sessions.
+- Measure and record playback drift and Socket.IO event delivery latency against the PRD targets.
+
+2. EPIC 2 — AI CONTENT ENGINE
+- Complete and verify the narrative variation lifecycle.
+- Confirm that the winning vote is applied at the correct playback timestamp for every connected participant.
+- Verify subtitle/localization variant switching without interrupting playback.
+- Verify that the frontend handles variation vote open, vote result, and application events consistently.
+- Review the currently empty server/src/services/ai/variation.service.js and implement only the responsibilities required by the PRD, if still needed.
+- Test variation voting, tie/no-vote behavior, invalid options, vote expiry, and reconnect/state recovery.
+
+3. EPIC 3 — DASHBOARD & RECOMMENDATION ANALYTICS
+3.1 Session Analytics — NOT IMPLEMENTED IN REVIEWED REPOSITORY
+- Implement session analytics data collection and aggregation.
+- Persist or derive the metrics required by the PRD:
+  * Session duration
+  * Peak concurrent participants
+  * Number of AI questions asked
+  * Number of trivia cards/events surfaced
+  * Chat activity volume
+- Implement analytics service, controller, and authenticated routes.
+- The reviewed files server/src/services/analytics.service.js (if present), server/src/controllers/analytics.controller.js, and server/src/routes/analytics.routes.js need inspection/implementation; the controller and route files inspected were empty.
+- Add the analytics section to the relevant dashboard view.
+- Test analytics for completed sessions and verify access control.
+
+3.2 Recommendations
+- Verify the existing recommendation implementation against the PRD's hybrid recommendation requirements.
+- Evaluate recommendation quality and prepare the required Precision@5 measurement/report, if specified by the PRD.
+- Test behavior for users with little or no watch history.
+
+3.3 Dashboard data
+- Verify Recently Watched, Upcoming Watch Spaces, and Quick Rejoin using real user data.
+- Verify empty, loading, and error states.
+- Verify that scheduled, active, and ended Watch Spaces appear in the correct sections.
+
+4. ADMIN METADATA / TIMELINE MANAGEMENT
+- Verify the admin UI can create and edit timeline metadata.
+- Validate timeline JSON against the PRD schema before saving.
+- Handle malformed JSON, invalid event types, invalid time ranges, missing event IDs, and invalid variation options.
+- Verify metadata upload/edit flows end-to-end with a real title.
+- Confirm timeline metadata is available to the AI retrieval and playback-triggered trivia/variation features.
+
+5. SECURITY & RELIABILITY VERIFICATION
+- Verify role-based access control for admin, host, and viewer actions.
+- Verify unauthorized users cannot access private Watch Spaces or perform host-only actions.
+- Verify Socket.IO authentication and membership checks for all room events.
+- Verify reconnect, duplicate event, and concurrent vote behavior.
+- Review CORS configuration and environment-variable handling before deployment.
+- Add/finalize health checks and error handling only where required by the PRD.
+
+6. TESTING & PERFORMANCE EVIDENCE
+- Run the complete backend automated test suite and record the result.
+- Run frontend build/lint/type checks available in the project and record results.
+- Perform two-browser end-to-end tests for synchronized playback, chat, presence, AI Q&A, trivia, and variation voting.
+- Measure and document the PRD performance targets:
+  * Normal API P95 latency: under 200 ms
+  * AI response P95 latency: under 3 seconds
+  * Playback drift: under 250 ms
+  * Socket event delivery: under 500 ms
+  * Trivia marker delivery: under 1 second
+- Do not report a target as passed until it has been measured and evidence is recorded.
+- Prepare test evidence/screenshots or a concise test report.
+
+7. DOCUMENTATION & FINAL DELIVERY
+- Expand the root README with project overview, prerequisites, environment setup, install/run instructions, and links to detailed docs.
+- Complete docs/README.md with:
+  * Architecture overview
+  * REST API reference
+  * Socket.IO event contract
+  * Database schema
+  * Setup and run guide
+  * Test and performance report
+  * Known limitations and retrospective
+- Create/verify a safe .env.example containing variable names and placeholder values only; never commit secrets.
+- Review .gitignore so .env.example can be tracked and shared.
+- Verify Docker Compose setup and MinIO/MongoDB instructions on a clean environment.
+- Prepare final demo flow and project retrospective.
+
+REPOSITORY ISSUES OBSERVED DURING REVIEW
+- server/src/controllers/analytics.controller.js was empty.
+- server/src/routes/analytics.routes.js was empty.
+- server/src/services/ai/variation.service.js was empty.
+- docs/README.md contained only a list of documentation topics, not the actual documentation.
+- Root README.md was minimal.
+- Root .env.example contained only a placeholder line rather than a usable example configuration.
+- .gitignore included .env.example in its ignore patterns; review this so the example file remains trackable.
+- These are repository observations from the review date; re-check the current branch before editing.
+
+RECOMMENDED IMPLEMENTATION ORDER
+1. Audit current session/chat/AI/trivia data flow for Analytics; then implement Analytics backend and dashboard.
+2. Complete and test variation application and subtitle switching.
+3. Complete admin timeline metadata validation and end-to-end flows.
+4. Verify recommendations and dashboard behavior against PRD acceptance criteria.
+5. Run security, reliability, and multi-client end-to-end tests.
+6. Measure performance and record evidence.
+7. Complete README, documentation, environment example, and final demo materials.
+
+WORKING RULES
+- Follow the uploaded PRD strictly.
+- Backend-first when backend work is required; test APIs in Postman and Socket.IO flows with an appropriate client before committing.
+- Use JavaScript (not TypeScript) and the existing MERN + Socket.IO + MinIO + Cloudflare Workers AI architecture.
+- Do not overengineer, introduce unnecessary dependencies, or recreate already-working features.
+- Work one step at a time; verify each step before moving to the next.
+
+IMPORTANT
+This is a gap checklist, not a claim that every item is definitely missing. Some items are marked “verify” because source files exist but runtime behavior or PRD acceptance criteria cannot be proven from repository inspection alone.

@@ -16,37 +16,41 @@ import RecommendedForYou from "./components/titles/RecommendedForYou.jsx";
 import UpcomingWatchSpaces from "./components/watchspace/UpcomingWatchSpaces.jsx";
 import QuickRejoinRooms from "./components/watchspace/QuickRejoinRooms";
 
+import Navbar from "./components/layout/Navbar.jsx";
+import HeroSection from "./components/layout/HeroSection.jsx";
+
 function HomePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[#141414] p-8 text-white">
-      <h1 className="text-3xl font-bold text-red-600">
-        Netflix AI Watch Spaces
-      </h1>
+    <main className="min-h-screen overflow-hidden bg-[#09090b] text-white">
+      <Navbar />
 
-      {user ? (
-        <div className="mt-6">
-          <p>Welcome, {user.name}</p>
-          <button
-            onClick={logout}
-            className="mt-4 rounded bg-red-600 px-5 py-2"
-          >
-            Logout
-          </button>
-          <QuickRejoinRooms />
-          <UpcomingWatchSpaces />
-          <RecommendedForYou />
+      <HeroSection />
+
+      {user && (
+        <div className="relative z-10 mx-auto -mt-4 max-w-[1440px] space-y-12 px-5 pb-20 sm:px-8 lg:px-12">
+          <section>
+            <QuickRejoinRooms />
+          </section>
+
+          <section>
+            <UpcomingWatchSpaces />
+          </section>
+
+          <section>
+            <RecommendedForYou />
+          </section>
         </div>
-      ) : (
-        <button
-          onClick={() => (window.location.href = "/login")}
-          className="mt-6 rounded bg-red-600 px-5 py-2"
-        >
-          Sign In
-        </button>
       )}
-    </div>
+
+      <footer className="border-t border-white/[0.06] px-5 py-8 text-center text-sm text-zinc-500">
+        <p>
+          © {new Date().getFullYear()} Netflix AI Watch Spaces. Built for
+          watching together.
+        </p>
+      </footer>
+    </main>
   );
 }
 
