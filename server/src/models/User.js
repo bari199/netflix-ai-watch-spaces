@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+
     email: {
       type: String,
       required: true,
@@ -15,56 +16,87 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+
     password: {
       type: String,
       select: false,
     },
+
     avatar: {
       type: String,
       default: "",
     },
+
     role: {
       type: String,
       enum: ["viewer", "host", "admin"],
       default: "viewer",
     },
+
     refreshTokenHash: {
       type: String,
       default: null,
       select: false,
     },
+
     refreshTokenExpiresAt: {
       type: Date,
       default: null,
       select: false,
     },
+
     isEmailVerified: {
       type: Boolean,
       default: false,
     },
+
     welcomeEmailSentAt: {
       type: Date,
       default: null,
     },
+
     emailVerificationTokenHash: {
       type: String,
       default: null,
       select: false,
     },
+
     emailVerificationExpiresAt: {
       type: Date,
       default: null,
       select: false,
     },
+
+    // Password reset OTP
+    passwordResetOtpHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    passwordResetOtpExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+
+    passwordResetOtpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+
     authProvider: {
       type: String,
       enum: ["local", "google", "facebook"],
       default: "local",
     },
+
     googleId: {
       type: String,
       sparse: true,
     },
+
     facebookId: {
       type: String,
       sparse: true,

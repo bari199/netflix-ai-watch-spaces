@@ -1,5 +1,9 @@
 import api, { setAccessToken, clearAccessToken } from "../api/axios.js";
 
+// ==========================================
+// Register
+// ==========================================
+
 export const registerUser = async (userData) => {
   const formData = new FormData();
 
@@ -11,27 +15,13 @@ export const registerUser = async (userData) => {
     formData.append("avatar", userData.avatar);
   }
 
-  // Temporary debugging
-  console.log("Selected avatar:", userData.avatar);
-  console.log("FormData entries:");
-
-  for (const [key, value] of formData.entries()) {
-    console.log(
-      key,
-      value instanceof File
-        ? {
-            name: value.name,
-            type: value.type,
-            size: value.size,
-          }
-        : value,
-    );
-  }
-
   const response = await api.post("/auth/register", formData);
-
   return response.data;
 };
+
+// ==========================================
+// Login
+// ==========================================
 
 export const loginUser = async (credentials) => {
   const response = await api.post("/auth/login", credentials);
@@ -41,6 +31,10 @@ export const loginUser = async (credentials) => {
   return response.data;
 };
 
+// ==========================================
+// Session
+// ==========================================
+
 export const refreshSession = async () => {
   const response = await api.post("/auth/refresh");
 
@@ -48,6 +42,54 @@ export const refreshSession = async () => {
 
   return response.data;
 };
+
+export const getCurrentUser = async () => {
+  const response = await api.get("/users/me");
+  return response.data;
+};
+
+// ==========================================
+// Forgot Password - Request OTP
+// ==========================================
+
+export const forgotPassword = async (email) => {
+  const response = await api.post("/auth/forgot-password", {
+    email: email.trim().toLowerCase(),
+  });
+
+  return response.data;
+};
+
+// ==========================================
+// Reset Password - Verify OTP
+// ==========================================
+
+export const resetPassword = async ({ email, otp, password }) => {
+  const response = await api.post("/auth/reset-password", {
+    email: email.trim().toLowerCase(),
+    otp: otp.trim(),
+    password,
+  });
+
+  return response.data;
+};
+
+// ==========================================
+// Change Password
+// ==========================================
+
+export const changePassword = async ({ currentPassword, newPassword }) => {
+  const response = await api.patch("/auth/change-password", {
+    currentPassword,
+    newPassword,
+  });
+
+  return response.data;
+};
+
+// ==========================================
+// Logout
+// ==========================================
 
 export const logoutUser = async () => {
   try {
@@ -58,15 +100,14 @@ export const logoutUser = async () => {
   }
 };
 
+// ==========================================
+// Email Verification
+// ==========================================
+
 export const verifyEmail = async (email, token) => {
   const response = await api.get("/auth/verify-email", {
     params: { email, token },
   });
 
-  return response.data;
-};
-
-export const getCurrentUser = async () => {
-  const response = await api.get("/users/me");
   return response.data;
 };

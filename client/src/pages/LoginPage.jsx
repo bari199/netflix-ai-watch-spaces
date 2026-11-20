@@ -12,7 +12,11 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, ease: "easeOut" },
+  },
 };
 
 const inputClass =
@@ -82,6 +86,7 @@ function LoginPage() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_30%,rgba(229,9,20,0.18),transparent_50%),radial-gradient(ellipse_at_85%_80%,rgba(127,29,29,0.22),transparent_45%)]"
       />
+
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.04] [background-image:linear-gradient(white_1px,transparent_1px),linear-gradient(90deg,white_1px,transparent_1px)] [background-size:48px_48px]"
@@ -105,7 +110,7 @@ function LoginPage() {
           </Link>
 
           <h2 className="max-w-md text-4xl font-extrabold leading-tight tracking-tight xl:text-5xl">
-            Welcome back to
+            Welcome back
             <span className="block bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">
               movie night.
             </span>
@@ -121,6 +126,7 @@ function LoginPage() {
               aria-hidden="true"
               className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600/25 blur-3xl"
             />
+
             <motion.img
               src={loginImage}
               alt="Watch together illustration"
@@ -151,9 +157,11 @@ function LoginPage() {
                     NETFLIX
                   </span>
                 </Link>
+
                 <h1 className="text-3xl font-bold tracking-tight">
                   Welcome back
                 </h1>
+
                 <p className="mt-1.5 text-sm text-zinc-400">
                   Sign in to continue your entertainment experience.
                 </p>
@@ -185,11 +193,13 @@ function LoginPage() {
                   >
                     Email address
                   </label>
+
                   <div className="relative">
                     <Mail
                       size={17}
                       className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
                     />
+
                     <input
                       id="email"
                       type="email"
@@ -212,11 +222,13 @@ function LoginPage() {
                   >
                     Password
                   </label>
+
                   <div className="relative">
                     <Lock
                       size={17}
                       className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
                     />
+
                     <input
                       id="password"
                       type={showPassword ? "text" : "password"}
@@ -228,6 +240,7 @@ function LoginPage() {
                       required
                       className={`${inputClass} pr-11`}
                     />
+
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
@@ -239,6 +252,19 @@ function LoginPage() {
                       {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
                   </div>
+                </motion.div>
+
+                {/* Forgot Password */}
+                <motion.div
+                  variants={itemVariants}
+                  className="flex justify-end"
+                >
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm font-medium text-red-400 transition hover:text-red-300 hover:underline"
+                  >
+                    Forgot Password?
+                  </Link>
                 </motion.div>
 
                 {/* Submit */}
@@ -268,13 +294,15 @@ function LoginPage() {
                 className="my-6 flex items-center gap-4"
               >
                 <div className="h-px flex-1 bg-white/10" />
+
                 <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                   Or continue with
                 </span>
+
                 <div className="h-px flex-1 bg-white/10" />
               </motion.div>
 
-              {/* Social logins (icon style) */}
+              {/* Social logins */}
               <motion.div
                 variants={itemVariants}
                 className="flex items-center justify-center gap-4"

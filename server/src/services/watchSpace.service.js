@@ -119,7 +119,14 @@ export const joinWatchSpace = async (watchSpaceId, userId, inviteCode) => {
     await watchSpace.save();
   }
 
-  return watchSpace;
+  const savedWatchSpace =
+    await WatchSpace.findById(watchSpaceId).select("status endedAt");
+
+  console.log("[DEBUG] EndWatchSpace persisted:", {
+    status: savedWatchSpace?.status,
+    endedAt: savedWatchSpace?.endedAt,
+  });
+  return savedWatchSpace;
 };
 
 export const leaveWatchSpace = async (watchSpaceId, userId) => {
@@ -351,6 +358,7 @@ export const getMyEndedWatchSpaces = async (userId, limit = 10) => {
 
   const watchSpaces = await WatchSpace.find({
     status: "ended",
+    endedAt: { $ne: null },
     $or: [{ host: userId }, { "participants.user": userId }],
   })
     .populate("title", "name description duration thumbnailKey")

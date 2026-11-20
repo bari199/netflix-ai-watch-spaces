@@ -1,22 +1,30 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext.jsx";
+
 import RegisterPage from "./pages/RegisterPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import VerifyEmailPage from "./pages/VerifyEmailPage.jsx";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
+import ResetPasswordPage from "./pages/ResetPasswordPage.jsx";
+
 import AdminRoute from "./components/admin/AdminRoute.jsx";
 import AdminLayout from "./components/admin/AdminLayout.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import TitleListPage from "./pages/admin/TitleListPage.jsx";
 import CreateTitlePage from "./pages/admin/CreateTitlePage.jsx";
 import EditTitlePage from "./pages/admin/EditTitlePage.jsx";
+
 import WatchSpacesPage from "./pages/watchspace/WatchSpacesPage.jsx";
 import WatchPageDetails from "./pages/watchspace/watchPageDetails.jsx";
 import CreateWatchSpacePage from "./pages/watchspace/CreateWatchSpacePage.jsx";
+
 import RecommendedForYou from "./components/titles/RecommendedForYou.jsx";
 import UpcomingWatchSpaces from "./components/watchspace/UpcomingWatchSpaces.jsx";
 import QuickRejoinRooms from "./components/watchspace/QuickRejoinRooms";
-import PastWatchSpaces from "./components/watchspace/PastWatchSpaces";
+
+
 import Navbar from "./components/layout/Navbar.jsx";
+import MyProfilePage from "./pages/MyProfilePage.jsx";
 import HeroSection from "./components/layout/HeroSection.jsx";
 import Footer from "./components/layout/Footer.jsx";
 
@@ -42,12 +50,9 @@ function HomePage() {
           <section>
             <RecommendedForYou />
           </section>
-
-          <section>
-            <PastWatchSpaces />
-          </section>
         </div>
       )}
+
       <section>
         <Footer />
       </section>
@@ -69,16 +74,27 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+
+      {/* Profile */}
+      <Route
+        path="/profile"
+        element={user ? <MyProfilePage /> : <Navigate to="/login" replace />}
+      />
+
+      {/* Watch Spaces */}
       <Route path="/watch-spaces" element={<WatchSpacesPage />} />
       <Route path="/watch-spaces/create" element={<CreateWatchSpacePage />} />
       <Route
         path="/watch-spaces/:watchSpaceId"
         element={<WatchPageDetails />}
       />
+
+      {/* Authentication */}
       <Route
         path="/login"
         element={user ? <Navigate to="/" replace /> : <LoginPage />}
       />
+
       <Route
         path="/register"
         element={user ? <Navigate to="/" replace /> : <RegisterPage />}
@@ -86,6 +102,18 @@ function App() {
 
       <Route path="/verify-email" element={<VerifyEmailPage />} />
 
+      {/* Password Reset */}
+      <Route
+        path="/forgot-password"
+        element={user ? <Navigate to="/" replace /> : <ForgotPasswordPage />}
+      />
+
+      <Route
+        path="/reset-password"
+        element={user ? <Navigate to="/" replace /> : <ResetPasswordPage />}
+      />
+
+      {/* Admin */}
       <Route element={<AdminRoute />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />

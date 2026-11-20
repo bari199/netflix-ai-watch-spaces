@@ -6,7 +6,9 @@ import {
   verifyEmail,
   createTokenPair,
   sendWelcomeEmail,
-  
+  forgotPassword,
+  resetPassword,
+  changePassword,
 } from "../services/auth.service.js";
 
 const refreshCookieOptions = {
@@ -34,7 +36,6 @@ export const googleAuthCallback = async (req, res) => {
 
     res.cookie("refreshToken", result.refreshToken, refreshCookieOptions);
 
-    // Send welcome email only once
     await sendWelcomeEmail(req.user);
 
     return res.redirect(process.env.CLIENT_URL || "http://localhost:5173");
@@ -65,7 +66,6 @@ export const facebookAuthCallback = async (req, res) => {
 
     res.cookie("refreshToken", result.refreshToken, refreshCookieOptions);
 
-    // Send welcome email only once
     await sendWelcomeEmail(req.user);
 
     return res.redirect(process.env.CLIENT_URL || "http://localhost:5173");
@@ -85,7 +85,6 @@ export const facebookAuthCallback = async (req, res) => {
 
 export const register = async (req, res) => {
   try {
-    // Temporary avatar upload debugging
     console.log(
       "Registration avatar received:",
       req.file
@@ -227,6 +226,82 @@ export const verifyEmailController = async (req, res) => {
     return res.status(200).json(result);
   } catch (error) {
     return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ==========================================
+// Forgot Password
+// ==========================================
+
+export const forgotPasswordController = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const result = await forgotPassword(email);
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Forgot password error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to process password reset request",
+    });
+  }
+};
+
+// ==========================================
+// Reset Password
+// ==========================================
+
+export const resetPasswordController = async (req, res) => {
+  try {
+    const { email, otp, password } = req.body;
+
+    const result = await resetPassword({
+      email,
+      otp,
+      password,
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ==========================================
+// Change Password
+// ==========================================
+
+export const changePasswordController = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    const result = await changePassword({
+      userId: req.user._id,
+      currentPassword,
+      newPassword,
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    const statusCode = error.message === "User not found" ? 404 : 400;
+
+    return res.status(statusCode).json({
       success: false,
       message: error.message,
     });

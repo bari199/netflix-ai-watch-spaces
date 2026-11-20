@@ -1,10 +1,16 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, randomInt, createHash } from "node:crypto";
+
 import sendEmail from "../config/brevo.js";
 import verificationEmail from "../utils/emailTemplates/verificationEmail.js";
 import welcomeEmail from "../utils/emailTemplates/welcomeEmail.js";
+import passwordResetEmail from "../utils/emailTemplates/passwordResetEmail.js";
 import { uploadAvatarBuffer } from "../services/avatar.service.js";
+
+// ==========================================
+// Sanitize User
+// ==========================================
 
 const sanitizeUser = (user) => {
   const userData = user.toObject();
@@ -14,11 +20,16 @@ const sanitizeUser = (user) => {
   delete userData.refreshTokenExpiresAt;
   delete userData.emailVerificationTokenHash;
   delete userData.emailVerificationExpiresAt;
+  delete userData.passwordResetOtpHash;
+  delete userData.passwordResetOtpExpiresAt;
+  delete userData.passwordResetOtpAttempts;
 
   return userData;
 };
 
-// Register new user
+// ==========================================
+// Register New User
+// ==========================================
 
 export const registerUser = async ({ name, email, password, avatarFile }) => {
   const normalizedEmail = email.toLowerCase().trim();
@@ -31,7 +42,6 @@ export const registerUser = async ({ name, email, password, avatarFile }) => {
     throw new Error("Email is already registered");
   }
 
-  // Upload avatar to MinIO (if provided)
   const avatarUrl = avatarFile ? await uploadAvatarBuffer(avatarFile) : "";
 
   const user = await User.create({
@@ -41,7 +51,6 @@ export const registerUser = async ({ name, email, password, avatarFile }) => {
     avatar: avatarUrl,
   });
 
-  // Send email verification
   await sendVerificationEmail(user);
 
   return {
@@ -50,39 +59,10 @@ export const registerUser = async ({ name, email, password, avatarFile }) => {
   };
 };
 
-// Register new user for admin
-// export const registerUser = async ({ name, email, password }) => {
-//   const normalizedEmail = email.toLowerCase().trim();
+// ==========================================
+// Verify Login Credentials
+// ==========================================
 
-//   const existingUser = await User.findOne({
-//     email: normalizedEmail,
-//   });
-
-//   if (existingUser) {
-//     throw new Error("Email is already registered");
-//   }
-
-//   const emailVerificationEnabled =
-//     process.env.EMAIL_VERIFICATION_ENABLED !== "false";
-
-//   const user = await User.create({
-//     name,
-//     email: normalizedEmail,
-//     password,
-//     isEmailVerified: !emailVerificationEnabled,
-//   });
-
-//   if (emailVerificationEnabled) {
-//     await sendVerificationEmail(user);
-//   }
-
-//   return {
-//     user: sanitizeUser(user),
-//     emailVerificationRequired: emailVerificationEnabled,
-//   };
-// };
-
-// Verify login credentials
 export const verifyUserCredentials = async ({ email, password }) => {
   const normalizedEmail = email.toLowerCase().trim();
 
@@ -107,6 +87,10 @@ export const verifyUserCredentials = async ({ email, password }) => {
   return createTokenPair(user);
 };
 
+// ==========================================
+// Create Access + Refresh Token Pair
+// ==========================================
+
 export const createTokenPair = async (user) => {
   const accessToken = jwt.sign(
     {
@@ -129,7 +113,6 @@ export const createTokenPair = async (user) => {
     },
   );
 
-  // Store only the SHA-256 hash of the refresh token
   const refreshTokenHash = createHash("sha256")
     .update(refreshToken)
     .digest("hex");
@@ -147,6 +130,10 @@ export const createTokenPair = async (user) => {
     user: sanitizeUser(user),
   };
 };
+
+// ==========================================
+// Refresh Access Token
+// ==========================================
 
 export const refreshAccessToken = async (refreshToken) => {
   if (!refreshToken) {
@@ -177,9 +164,12 @@ export const refreshAccessToken = async (refreshToken) => {
     throw new Error("Invalid or expired refresh token");
   }
 
-  // Generate a new token pair and rotate the stored refresh token hash
   return createTokenPair(user);
 };
+
+// ==========================================
+// Logout User
+// ==========================================
 
 export const logoutUser = async (refreshToken) => {
   if (!refreshToken) {
@@ -198,6 +188,10 @@ export const logoutUser = async (refreshToken) => {
     },
   );
 };
+
+// ==========================================
+// Send Email Verification
+// ==========================================
 
 export const sendVerificationEmail = async (user) => {
   const verificationToken = randomBytes(32).toString("hex");
@@ -233,6 +227,10 @@ export const sendVerificationEmail = async (user) => {
   };
 };
 
+// ==========================================
+// Send Welcome Email
+// ==========================================
+
 export const sendWelcomeEmail = async (user) => {
   if (user.welcomeEmailSentAt) return;
 
@@ -253,6 +251,10 @@ export const sendWelcomeEmail = async (user) => {
     console.error("Welcome email delivery failed:", error.message);
   }
 };
+
+// ==========================================
+// Verify Email
+// ==========================================
 
 export const verifyEmail = async ({ email, token }) => {
   if (!email || !token) {
@@ -283,14 +285,12 @@ export const verifyEmail = async ({ email, token }) => {
     throw new Error("Invalid or expired verification token");
   }
 
-  // Mark email as verified
   user.isEmailVerified = true;
   user.emailVerificationTokenHash = null;
   user.emailVerificationExpiresAt = null;
 
   await user.save();
 
-  // Send welcome email only once
   if (!user.welcomeEmailSentAt) {
     try {
       await sendEmail({
@@ -301,9 +301,7 @@ export const verifyEmail = async ({ email, token }) => {
         }),
       });
 
-      // Save timestamp only after successful email delivery
       user.welcomeEmailSentAt = new Date();
-
       await user.save();
 
       console.log(`Welcome email sent successfully to ${user.email}`);
@@ -315,5 +313,205 @@ export const verifyEmail = async ({ email, token }) => {
   return {
     success: true,
     message: "Email verified successfully",
+  };
+};
+
+// ==========================================
+// Password Reset OTP Helper
+// ==========================================
+
+const hashResetOtp = (otp) => {
+  return createHash("sha256").update(otp).digest("hex");
+};
+
+// ==========================================
+// Forgot Password - Send OTP
+// ==========================================
+
+export const forgotPassword = async (email) => {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const user = await User.findOne({
+    email: normalizedEmail,
+  }).select("+password");
+
+  const genericResponse = {
+    success: true,
+    message: "If the account exists, a password reset OTP has been sent.",
+  };
+
+  if (!user || !user.password) {
+    return genericResponse;
+  }
+
+  const otp = randomInt(100000, 1000000).toString();
+
+  user.passwordResetOtpHash = hashResetOtp(otp);
+
+  user.passwordResetOtpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  user.passwordResetOtpAttempts = 0;
+
+  await user.save();
+
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: "Your Password Reset OTP - Netflix AI Watch Spaces",
+      htmlContent: passwordResetEmail({
+        name: user.name,
+        otp,
+      }),
+    });
+  } catch (error) {
+    user.passwordResetOtpHash = null;
+    user.passwordResetOtpExpiresAt = null;
+    user.passwordResetOtpAttempts = 0;
+
+    await user.save();
+
+    console.error("Password reset OTP email failed:", error.message);
+
+    throw new Error("Unable to send password reset OTP");
+  }
+
+  return genericResponse;
+};
+
+// ==========================================
+// Reset Password - Verify OTP
+// ==========================================
+
+export const resetPassword = async ({ email, otp, password }) => {
+  if (!email || !otp || !password) {
+    throw new Error("Email, OTP and new password are required");
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  if (!/^\d{6}$/.test(otp)) {
+    throw new Error("Enter a valid 6-digit OTP");
+  }
+
+  if (password.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
+
+  const user = await User.findOne({
+    email: normalizedEmail,
+  }).select(
+    "+password +passwordResetOtpHash +passwordResetOtpExpiresAt +passwordResetOtpAttempts",
+  );
+
+  if (!user || !user.passwordResetOtpHash) {
+    throw new Error("Invalid or expired OTP");
+  }
+
+  if (
+    !user.passwordResetOtpExpiresAt ||
+    user.passwordResetOtpExpiresAt <= new Date()
+  ) {
+    user.passwordResetOtpHash = null;
+    user.passwordResetOtpExpiresAt = null;
+    user.passwordResetOtpAttempts = 0;
+
+    await user.save();
+
+    throw new Error("OTP has expired. Please request a new OTP");
+  }
+
+  if (user.passwordResetOtpAttempts >= 5) {
+    throw new Error("Maximum OTP attempts exceeded. Request a new OTP");
+  }
+
+  const submittedOtpHash = hashResetOtp(otp);
+
+  if (submittedOtpHash !== user.passwordResetOtpHash) {
+    user.passwordResetOtpAttempts += 1;
+
+    const attemptsExceeded = user.passwordResetOtpAttempts >= 5;
+
+    if (attemptsExceeded) {
+      user.passwordResetOtpHash = null;
+      user.passwordResetOtpExpiresAt = null;
+      user.passwordResetOtpAttempts = 0;
+    }
+
+    await user.save();
+
+    throw new Error(
+      attemptsExceeded
+        ? "Maximum OTP attempts exceeded. Request a new OTP"
+        : "Incorrect OTP. Please try again",
+    );
+  }
+
+  user.password = password;
+
+  // Clear OTP after successful reset
+  user.passwordResetOtpHash = null;
+  user.passwordResetOtpExpiresAt = null;
+  user.passwordResetOtpAttempts = 0;
+
+  // Invalidate existing refresh session
+  user.refreshTokenHash = null;
+  user.refreshTokenExpiresAt = null;
+
+  await user.save();
+
+  return {
+    success: true,
+    message: "Password reset successfully. Please log in again.",
+  };
+};
+
+// ==========================================
+// Change Password
+// ==========================================
+
+export const changePassword = async ({
+  userId,
+  currentPassword,
+  newPassword,
+}) => {
+  if (!currentPassword || !newPassword) {
+    throw new Error("Current password and new password are required");
+  }
+
+  if (newPassword.length < 8) {
+    throw new Error("New password must be at least 8 characters");
+  }
+
+  if (currentPassword === newPassword) {
+    throw new Error("New password must be different from current password");
+  }
+
+  const user = await User.findById(userId).select("+password");
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (!user.password) {
+    throw new Error("Password change is unavailable for this account");
+  }
+
+  const isPasswordValid = await user.comparePassword(currentPassword);
+
+  if (!isPasswordValid) {
+    throw new Error("Current password is incorrect");
+  }
+
+  user.password = newPassword;
+
+  // Invalidate existing refresh session
+  user.refreshTokenHash = null;
+  user.refreshTokenExpiresAt = null;
+
+  await user.save();
+
+  return {
+    success: true,
+    message: "Password changed successfully. Please log in again.",
   };
 };
