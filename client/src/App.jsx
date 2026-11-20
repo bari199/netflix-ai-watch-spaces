@@ -15,7 +15,7 @@ import CreateWatchSpacePage from "./pages/watchspace/CreateWatchSpacePage.jsx";
 import RecommendedForYou from "./components/titles/RecommendedForYou.jsx";
 import UpcomingWatchSpaces from "./components/watchspace/UpcomingWatchSpaces.jsx";
 import QuickRejoinRooms from "./components/watchspace/QuickRejoinRooms";
-
+import PastWatchSpaces from "./components/watchspace/PastWatchSpaces";
 import Navbar from "./components/layout/Navbar.jsx";
 import HeroSection from "./components/layout/HeroSection.jsx";
 import Footer from "./components/layout/Footer.jsx";
@@ -41,6 +41,10 @@ function HomePage() {
 
           <section>
             <RecommendedForYou />
+          </section>
+
+          <section>
+            <PastWatchSpaces />
           </section>
         </div>
       )}

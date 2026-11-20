@@ -92,3 +92,15 @@ export const transferWatchSpaceHost = async (watchSpaceId, newHostId) => {
 
   return response.data;
 };
+
+// Get WatchSpace analytics (Host only)
+export const getWatchSpaceAnalytics = async (watchSpaceId) => {
+  const response = await api.get(`/analytics/${watchSpaceId}`);
+  return response.data;
+};
+
+// Get ended WatchSpaces for the logged-in user
+export const getMyEndedWatchSpaces = async () => {
+  const response = await api.get("/watch-spaces/my-ended?limit=10");
+  return response.data;
+};

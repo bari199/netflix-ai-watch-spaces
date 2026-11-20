@@ -5,7 +5,7 @@ dotenv.config({ path: "../.env" });
 
 const accessToken = process.env.SOCKET_TEST_TOKEN;
 
-const watchSpaceId = "6aeca86c39e62cb020f09f85";
+const watchSpaceId = "6afda416ecfdba5cdc206371";
 
 if (!accessToken) {
   console.error("SOCKET_TEST_TOKEN is missing");

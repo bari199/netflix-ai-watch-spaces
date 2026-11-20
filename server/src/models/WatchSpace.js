@@ -185,6 +185,24 @@ const watchSpaceSchema = new mongoose.Schema(
       enum: ["scheduled", "waiting", "active", "ended"],
       default: "waiting",
     },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    endedAt: {
+      type: Date,
+      default: null,
+    },
+    peakParticipants: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    aiQuestionsAsked: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     scheduledAt: {
       type: Date,
       default: null,

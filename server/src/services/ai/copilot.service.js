@@ -7,6 +7,8 @@ import {
 } from "./retrieval.service.js";
 
 const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_GENERAL_MAX_TOKENS = 384;
+
 const UNAVAILABLE_ANSWER =
   "This information is unavailable in the title metadata.";
 
@@ -26,11 +28,21 @@ const getTimeoutMs = () => {
   return timeoutMs;
 };
 
+const getGeneralMaxTokens = () => {
+  const value = Number(process.env.CLOUDFLARE_AI_GENERAL_MAX_TOKENS);
+
+  if (!Number.isInteger(value) || value <= 0) {
+    return DEFAULT_GENERAL_MAX_TOKENS;
+  }
+
+  return value;
+};
+
 export const createCloudflareAIClient = ({
   fetchImpl = globalThis.fetch,
   timeoutMs = getTimeoutMs(),
 } = {}) => ({
-  generate: async ({ messages }) => {
+  generate: async ({ messages, maxTokens }) => {
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const apiToken = process.env.CLOUDFLARE_API_TOKEN;
     const model = process.env.CLOUDFLARE_AI_MODEL;
@@ -52,6 +64,8 @@ export const createCloudflareAIClient = ({
       let response;
 
       try {
+        const aiStartedAt = Date.now();
+
         response = await fetchImpl(
           `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
           {
@@ -60,9 +74,18 @@ export const createCloudflareAIClient = ({
               Authorization: `Bearer ${apiToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ messages }),
+            body: JSON.stringify({
+              messages,
+              ...(Number.isInteger(maxTokens) && maxTokens > 0
+                ? { max_tokens: maxTokens }
+                : {}),
+            }),
             signal: controller.signal,
           },
+        );
+
+        console.info(
+          `[Cloudflare AI] Request completed in ${Date.now() - aiStartedAt}ms`,
         );
       } catch (error) {
         if (controller.signal.aborted) {
@@ -77,7 +100,6 @@ export const createCloudflareAIClient = ({
         });
       }
 
-      // Capture actual Cloudflare API error details
       if (!response?.ok) {
         const errorBody = await response.text();
 
@@ -144,6 +166,14 @@ export const createCloudflareAIClient = ({
 
 const unavailableResult = () => ({
   answer: UNAVAILABLE_ANSWER,
+  answerMode: "unavailable",
+  sourceEvents: [],
+  generatedAt: new Date().toISOString(),
+});
+
+const generalAnswerResult = (answer) => ({
+  answer: answer.trim(),
+  answerMode: "general",
   sourceEvents: [],
   generatedAt: new Date().toISOString(),
 });
@@ -220,6 +250,48 @@ const createMessages = (question, evidenceEvents) => [
   },
 ];
 
+const createGeneralMessages = (question) => [
+  {
+    role: "system",
+    content: [
+      "You are a helpful general-knowledge assistant.",
+      "Answer in the same language as the user's question.",
+      "Give a clear, medium-length answer in 5–8 sentences.",
+      "This answer is not verified against the WatchSpace timeline.",
+      "Never invent movie-specific scenes, dialogue, character actions, or plot details.",
+      "If title-specific information is missing, clearly say you cannot verify it.",
+      "Do not claim that general knowledge came from timeline evidence.",
+    ].join(" "),
+  },
+  {
+    role: "user",
+    content: question,
+  },
+];
+
+const parseGeneralResponse = (modelResult) => {
+  const finishReason = modelResult?.choices?.[0]?.finish_reason;
+
+  if (finishReason === "length") {
+    return unavailableResult();
+  }
+
+  const content =
+    typeof modelResult === "string"
+      ? modelResult
+      : (modelResult?.choices?.[0]?.message?.content ?? modelResult?.response);
+
+  if (typeof content !== "string" || !content.trim()) {
+    return unavailableResult();
+  }
+
+  const answer = content.trim();
+
+  return generalAnswerResult(
+    `General knowledge (not verified against this WatchSpace timeline):\n${answer}`,
+  );
+};
+
 const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
   const rawFinishReason = modelResult?.choices?.[0]?.finish_reason;
 
@@ -268,7 +340,6 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
   let result;
 
   try {
-    // Remove Markdown JSON code fences if the model returns them.
     const normalizedContent = content
       .trim()
       .replace(/^```(?:json)?\s*/i, "")
@@ -289,24 +360,34 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
 
     return unavailableResult();
   }
+
   const parsedSelectionCount = Array.isArray(result?.selections)
     ? result.selections.length
     : 0;
 
-  if (
-    !result ||
-    !Array.isArray(result.selections) ||
-    result.selections.length === 0
-  ) {
+  if (!result || !Array.isArray(result.selections)) {
     diagnose({
       modelFinishReason,
       responseContentPresent,
       parsedSelectionCount,
-      rejectionCategory: "empty_selection",
+      rejectionCategory: "invalid_selection_format",
       finalAcceptedCitationCount: 0,
     });
 
     return unavailableResult();
+  }
+
+  if (result.selections.length === 0) {
+    diagnose({
+      modelFinishReason,
+      responseContentPresent,
+      parsedSelectionCount: 0,
+      rejectionCategory: "empty_selection",
+      finalAcceptedCitationCount: 0,
+      fallbackMode: "general",
+    });
+
+    return null;
   }
 
   const eventsById = new Map(
@@ -419,6 +500,7 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
 
   return {
     answer: verifiedSelections.map(({ excerpt }) => excerpt).join("\n"),
+    answerMode: "timeline",
     sourceEvents,
     generatedAt: new Date().toISOString(),
   };
@@ -556,21 +638,57 @@ export const answerQuestion = async (
           ? "no_temporal_candidates"
           : "no_retrieved_evidence";
 
-    diagnose({ rejectionCategory });
+    diagnose({
+      rejectionCategory,
+      fallbackMode: "general",
+    });
 
-    return unavailableResult();
+    const client = aiClient || createCloudflareAIClient();
+
+    let generalResponse;
+
+    try {
+      generalResponse = await client.generate({
+        messages: createGeneralMessages(question.trim()),
+        maxTokens: getGeneralMaxTokens(),
+      });
+    } catch (error) {
+      console.error(
+        "[Cloudflare AI General Fallback Error]",
+        error?.message || error,
+      );
+
+      diagnose({
+        rejectionCategory: "general_fallback_provider_error",
+      });
+
+      if (error && typeof error === "object") {
+        error.aiRejectionCategory = "provider_error";
+      }
+
+      throw error;
+    }
+
+    console.log("[General Fallback Debug]", {
+      finishReason: generalResponse?.choices?.[0]?.finish_reason,
+      contentType: typeof generalResponse?.choices?.[0]?.message?.content,
+      contentLength: generalResponse?.choices?.[0]?.message?.content?.length,
+      responseType: typeof generalResponse?.response,
+      responseLength: generalResponse?.response?.length,
+    });
+
+    return parseGeneralResponse(generalResponse);
   }
+
+  const client = aiClient || createCloudflareAIClient();
 
   let response;
 
   try {
-    const client = aiClient || createCloudflareAIClient();
-
     response = await client.generate({
       messages: createMessages(question.trim(), evidenceEvents),
     });
   } catch (error) {
-    // Print the actual Cloudflare error in the backend terminal.
     console.error("[Cloudflare AI Provider Error]", error?.message || error);
 
     diagnose({
@@ -584,5 +702,47 @@ export const answerQuestion = async (
     throw error;
   }
 
-  return parseGroundedResponse(response, evidenceEvents, diagnose);
+  const groundedResult = parseGroundedResponse(
+    response,
+    evidenceEvents,
+    diagnose,
+  );
+
+  if (groundedResult !== null) {
+    return groundedResult;
+  }
+
+  let generalResponse;
+
+  try {
+    generalResponse = await client.generate({
+      messages: createGeneralMessages(question.trim()),
+      maxTokens: getGeneralMaxTokens(),
+    });
+  } catch (error) {
+    console.error(
+      "[Cloudflare AI General Fallback Error]",
+      error?.message || error,
+    );
+
+    diagnose({
+      rejectionCategory: "general_fallback_provider_error",
+    });
+
+    if (error && typeof error === "object") {
+      error.aiRejectionCategory = "provider_error";
+    }
+
+    throw error;
+  }
+
+  console.log("[General Fallback Debug]", {
+    finishReason: generalResponse?.choices?.[0]?.finish_reason,
+    contentType: typeof generalResponse?.choices?.[0]?.message?.content,
+    contentLength: generalResponse?.choices?.[0]?.message?.content?.length,
+    responseType: typeof generalResponse?.response,
+    responseLength: generalResponse?.response?.length,
+  });
+
+  return parseGeneralResponse(generalResponse);
 };

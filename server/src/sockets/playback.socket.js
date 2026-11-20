@@ -360,17 +360,22 @@ const registerPlaybackHandlers = (io, socket) => {
 
       const previousPlaybackPosition = watchSpace.playback.positionSeconds;
 
-      if (action === "play") {
-        watchSpace.playback.state = "playing";
+     if (action === "play") {
+       watchSpace.playback.state = "playing";
 
-        if (watchSpace.status === "waiting") {
-          watchSpace.status = "active";
-        }
-      } else if (action === "pause") {
-        watchSpace.playback.state = "paused";
-      } else if (action === "buffering") {
-        watchSpace.playback.state = "buffering";
-      }
+       // Record the first playback start time only once.
+       if (!watchSpace.startedAt) {
+         watchSpace.startedAt = new Date();
+       }
+
+       if (watchSpace.status === "waiting") {
+         watchSpace.status = "active";
+       }
+     } else if (action === "pause") {
+       watchSpace.playback.state = "paused";
+     } else if (action === "buffering") {
+       watchSpace.playback.state = "buffering";
+     }
 
       // Seek changes position but preserves the current play/pause state.
       watchSpace.playback.positionSeconds = positionSeconds;

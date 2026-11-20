@@ -2,12 +2,13 @@ import dotenv from "dotenv";
 import { io } from "socket.io-client";
 import mongoose from "mongoose";
 import WatchSpace from "../src/models/WatchSpace.js";
+import Title from "../src/models/Title.js";
 import connectDB from "../src/config/db.js";
 
 dotenv.config({ path: "../.env" });
 
 const accessToken = process.env.SOCKET_TEST_TOKEN;
-const watchSpaceId = "6aeca86c39e62cb020f09f85";
+const watchSpaceId = "6afda416ecfdba5cdc206371";
 
 if (!accessToken) {
   console.error("SOCKET_TEST_TOKEN is missing");
@@ -18,15 +19,10 @@ const socket = io("http://localhost:5000", {
   auth: { token: accessToken },
   reconnection: false,
   timeout: 5000,
-  autoConnect: false, // Prevent automatic connection
+  autoConnect: false,
 });
 
-const actions = [
-  { action: "play", positionSeconds: 120, expectedState: "playing" },
-  { action: "pause", positionSeconds: 120, expectedState: "paused" },
-  { action: "seek", positionSeconds: 300, expectedState: "seeking" },
-];
-
+let actions = [];
 let currentIndex = 0;
 
 const finish = async (success) => {
@@ -50,9 +46,14 @@ const runNextAction = () => {
 
   let acknowledgementReceived = false;
   let eventReceived = false;
+  let verificationStarted = false;
 
   const completeAction = async () => {
-    if (!acknowledgementReceived || !eventReceived) return;
+    if (!acknowledgementReceived || !eventReceived || verificationStarted) {
+      return;
+    }
+
+    verificationStarted = true;
 
     try {
       const room = await WatchSpace.findById(watchSpaceId).lean();
@@ -62,6 +63,12 @@ const runNextAction = () => {
         room?.playback?.positionSeconds !== current.positionSeconds
       ) {
         console.error("FAIL: Database playback state mismatch");
+        console.error("Expected:", {
+          state: current.expectedState,
+          positionSeconds: current.positionSeconds,
+        });
+        console.error("Actual:", room?.playback);
+
         await finish(false);
         return;
       }
@@ -89,7 +96,9 @@ const runNextAction = () => {
     }
 
     eventReceived = true;
+
     console.log(`PASS: ${current.action.toUpperCase()} event broadcast`);
+
     completeAction();
   });
 
@@ -108,7 +117,9 @@ const runNextAction = () => {
       }
 
       acknowledgementReceived = true;
+
       console.log(`PASS: ${current.action.toUpperCase()} acknowledged`);
+
       completeAction();
     },
   );
@@ -139,10 +150,77 @@ const startTest = async () => {
     await connectDB();
     console.log("PASS: Test MongoDB connected");
 
+    const watchSpace = await WatchSpace.findById(watchSpaceId)
+      .select("_id title host")
+      .lean();
+
+    if (!watchSpace) {
+      console.error(
+        "FAIL: WatchSpace does not exist in the connected database",
+      );
+
+      console.error("WatchSpace ID:", watchSpaceId);
+
+      await finish(false);
+      return;
+    }
+
+    console.log("PASS: WatchSpace found:", watchSpace._id.toString());
+    console.log("WatchSpace host ID:", watchSpace.host?.toString());
+
+    const titleId = watchSpace.title?._id || watchSpace.title;
+
+    const title = await Title.findById(titleId).select("title duration").lean();
+
+    if (
+      !title ||
+      typeof title.duration !== "number" ||
+      !Number.isFinite(title.duration) ||
+      title.duration <= 0
+    ) {
+      console.error("FAIL: Valid title duration not found");
+      await finish(false);
+      return;
+    }
+
+    const durationSeconds = title.duration;
+
+    console.log("PASS: Title found:", title.title);
+    console.log("Title duration:", durationSeconds, "seconds");
+
+    // Select valid positions within the actual video duration.
+    const playbackPosition = Math.min(120, Math.floor(durationSeconds / 2));
+
+    const seekPosition = Math.min(300, Math.floor(durationSeconds * 0.75));
+
+    actions = [
+      {
+        action: "play",
+        positionSeconds: playbackPosition,
+        expectedState: "playing",
+      },
+      {
+        action: "pause",
+        positionSeconds: playbackPosition,
+        expectedState: "paused",
+      },
+      {
+        action: "seek",
+        positionSeconds: seekPosition,
+        expectedState: "paused",
+      },
+    ];
+
+    console.log("Playback test positions:", {
+      play: playbackPosition,
+      pause: playbackPosition,
+      seek: seekPosition,
+    });
+
     socket.connect();
   } catch (error) {
-    console.error("FAIL: MongoDB connection:", error.message);
-    process.exitCode = 1;
+    console.error("FAIL: Test setup:", error.message);
+    await finish(false);
   }
 };
 

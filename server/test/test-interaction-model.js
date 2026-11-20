@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import assert from "node:assert/strict";
-import Interaction from "./src/models/Interaction.js";
+import Interaction from "../src/models/Interaction.js";
 
 const id = new mongoose.Types.ObjectId();
 

@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+﻿import dotenv from "dotenv";
 import { io } from "socket.io-client";
 import mongoose from "mongoose";
 import WatchSpace from "../src/models/WatchSpace.js";
@@ -7,7 +7,7 @@ import connectDB from "../src/config/db.js";
 dotenv.config({ path: "../.env" });
 
 const accessToken = process.env.VIEWER_SOCKET_TEST_TOKEN;
-const watchSpaceId = "6af20bef2ce49f8c669bc91f";
+const watchSpaceId = "6afda416ecfdba5cdc206371";
 
 if (!accessToken) {
   console.error("SOCKET_TEST_TOKEN is missing");
@@ -150,3 +150,4 @@ const startTest = async () => {
 };
 
 startTest();
+

@@ -44,6 +44,14 @@ const registerPresenceHandlers = (io, socket) => {
   // Send current presence to everyone in a WatchSpace
   const broadcastPresence = async (watchSpaceId) => {
     const participants = await getOnlineParticipants(watchSpaceId);
+    await WatchSpace.updateOne(
+      { _id: watchSpaceId },
+      {
+        $max: {
+          peakParticipants: participants.length,
+        },
+      },
+    );
 
     io.to(getRoomName(watchSpaceId)).emit("presence.updated", {
       watchSpaceId: watchSpaceId.toString(),

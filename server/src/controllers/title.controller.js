@@ -11,9 +11,12 @@ import {
 } from "../services/title.service.js";
 
 // Handle controller errors
+
+// Handle controller errors
 const handleTitleError = (res, error) => {
   console.error("Title API Error:", error.message);
 
+  // Mongoose validation errors
   if (error.name === "ValidationError" || error.name === "CastError") {
     return res.status(400).json({
       success: false,
@@ -21,6 +24,7 @@ const handleTitleError = (res, error) => {
     });
   }
 
+  // Resource not found
   if (
     error.message === "Title not found" ||
     error.message === "Subtitle variant not found" ||
@@ -32,9 +36,13 @@ const handleTitleError = (res, error) => {
     });
   }
 
+  // Client-side validation errors
   if (
     error.message.includes("not allowed") ||
-    error.message.includes("valid title update data")
+    error.message.includes("valid title update data") ||
+    error.message.includes("references an unknown variation option") ||
+    error.message.includes("references an unknown timeline event") ||
+    error.message.includes("Invalid JSON format")
   ) {
     return res.status(400).json({
       success: false,
@@ -42,6 +50,7 @@ const handleTitleError = (res, error) => {
     });
   }
 
+  // Unexpected server errors
   return res.status(500).json({
     success: false,
     message: "Internal server error",

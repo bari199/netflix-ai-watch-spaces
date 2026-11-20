@@ -28,6 +28,9 @@ export const createWatchSpace = async (
     aiVerbosity,
     triviaEnabled,
     votingEnabled,
+    startedAt: null,
+    endedAt: null,
+    peakParticipants: 1,
     status: scheduledAt ? "scheduled" : "waiting",
     scheduledAt,
   });
@@ -107,6 +110,12 @@ export const joinWatchSpace = async (watchSpaceId, userId, inviteCode) => {
       role: "viewer",
     });
 
+    // Update historical peak participant count.
+    watchSpace.peakParticipants = Math.max(
+      watchSpace.peakParticipants || 0,
+      watchSpace.participants.length,
+    );
+
     await watchSpace.save();
   }
 
@@ -145,13 +154,14 @@ export const endWatchSpace = async (watchSpaceId, hostId) => {
   }
 
   watchSpace.status = "ended";
+  watchSpace.endedAt = new Date();
 
   await watchSpace.save();
 
   return watchSpace;
 };
 
-// Host: Mute or unmute a participant
+// Host: Mute or unmute a participant.
 export const setParticipantMute = async (
   watchSpaceId,
   hostId,
@@ -301,7 +311,7 @@ export const transferWatchSpaceHost = async (
   return watchSpace;
 };
 
-// Get upcoming scheduled WatchSpaces for a user
+// Get upcoming scheduled WatchSpaces for a user.
 export const getUpcomingScheduledWatchSpaces = async (userId, limit = 10) => {
   const safeLimit = Math.min(20, Math.max(1, Number(limit) || 10));
 
@@ -316,7 +326,7 @@ export const getUpcomingScheduledWatchSpaces = async (userId, limit = 10) => {
     .limit(safeLimit);
 };
 
-// Get active WatchSpaces the current user can rejoin
+// Get active WatchSpaces the current user can rejoin.
 export const getMyActiveWatchSpaces = async (userId, limit = 10) => {
   const safeLimit = Math.min(20, Math.max(1, Number(limit) || 10));
 
@@ -328,4 +338,34 @@ export const getMyActiveWatchSpaces = async (userId, limit = 10) => {
     .populate("host", "name avatar")
     .sort({ updatedAt: -1 })
     .limit(safeLimit);
+};
+
+// Get ended WatchSpaces for the logged-in user
+export const getMyEndedWatchSpaces = async (userId, limit = 10) => {
+  const safeLimit = Math.min(20, Math.max(1, Number(limit) || 10));
+
+  console.log("[DEBUG] getMyEndedWatchSpaces called:", {
+    userId: userId.toString(),
+    limit: safeLimit,
+  });
+
+  const watchSpaces = await WatchSpace.find({
+    status: "ended",
+    $or: [{ host: userId }, { "participants.user": userId }],
+  })
+    .populate("title", "name description duration thumbnailKey")
+    .populate("host", "name avatar")
+    .sort({ endedAt: -1 })
+    .limit(safeLimit);
+
+  console.log(
+    "[DEBUG] Ended WatchSpaces:",
+    watchSpaces.map((space) => ({
+      id: space._id.toString(),
+      status: space.status,
+      endedAt: space.endedAt,
+    })),
+  );
+
+  return watchSpaces;
 };

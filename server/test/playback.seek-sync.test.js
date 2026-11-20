@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+﻿import dotenv from "dotenv";
 import { io } from "socket.io-client";
 import mongoose from "mongoose";
 import connectDB from "../src/config/db.js";
@@ -7,10 +7,10 @@ dotenv.config({ path: "../.env" });
 
 const hostToken = process.env.HOST_SOCKET_TEST_TOKEN;
 const viewerToken = process.env.VIEWER_SOCKET_TEST_TOKEN;
-const watchSpaceId = "6af20bef2ce49f8c669bc91f";
+const watchSpaceId = "6afda416ecfdba5cdc206371";
 
-const HOST_POSITION = 300;
-const VIEWER_POSITION = 299;
+const HOST_POSITION = 212;
+const VIEWER_POSITION = 211;
 
 if (!hostToken || !viewerToken) {
   console.error("FAIL: Host or Viewer token is missing");

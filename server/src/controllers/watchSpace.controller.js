@@ -11,6 +11,7 @@ import {
   transferWatchSpaceHost,
   getUpcomingScheduledWatchSpaces as getUpcomingScheduledWatchSpacesService,
   getMyActiveWatchSpaces as getMyActiveWatchSpacesService,
+  getMyEndedWatchSpaces as getMyEndedWatchSpacesService,
 } from "../services/watchSpace.service.js";
 
 const handleWatchSpaceError = (res, error) => {
@@ -353,6 +354,23 @@ export const getMyActiveWatchSpacesController = async (req, res) => {
       req.user._id,
       limit,
     );
+
+    return res.status(200).json({
+      success: true,
+      count: watchSpaces.length,
+      watchSpaces,
+    });
+  } catch (error) {
+    return handleWatchSpaceError(res, error);
+  }
+};
+
+// Get ended WatchSpaces for the logged-in user
+export const getMyEndedWatchSpacesController = async (req, res) => {
+  try {
+    const limit = req.query.limit || 10;
+
+    const watchSpaces = await getMyEndedWatchSpacesService(req.user._id, limit);
 
     return res.status(200).json({
       success: true,

@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: "../.env" });
 
 const SERVER_URL = "http://localhost:5000";
-const WATCH_SPACE_ID = "6af20bef2ce49f8c669bc91f";
+const WATCH_SPACE_ID = "6afda416ecfdba5cdc206371";
 
 const HOST_TOKEN = process.env.HOST_SOCKET_TEST_TOKEN;
 const VIEWER_TOKEN = process.env.VIEWER_SOCKET_TEST_TOKEN;

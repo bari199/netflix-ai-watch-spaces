@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+﻿import dotenv from "dotenv";
 import { io as createSocket } from "socket.io-client";
 import mongoose from "mongoose";
 import connectDB from "../src/config/db.js";
@@ -9,7 +9,7 @@ dotenv.config({ path: "../.env" });
 const HOST_TOKEN = process.env.HOST_SOCKET_TEST_TOKEN;
 const VIEWER_TOKEN = process.env.VIEWER_SOCKET_TEST_TOKEN;
 
-const WATCH_SPACE_ID = "6af20bef2ce49f8c669bc91f";
+const WATCH_SPACE_ID = "6afda416ecfdba5cdc206371";
 
 const SERVER_URL = "http://localhost:5000";
 const HOST_POSITION = 200;
@@ -155,3 +155,4 @@ try {
 
   await mongoose.disconnect();
 }
+

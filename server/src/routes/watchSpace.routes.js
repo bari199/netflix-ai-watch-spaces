@@ -19,6 +19,7 @@ import {
   transferWatchSpaceHostController,
   getUpcomingScheduledWatchSpacesController,
   getMyActiveWatchSpacesController,
+  getMyEndedWatchSpacesController,
 } from "../controllers/watchSpace.controller.js";
 
 const router = express.Router();
@@ -33,6 +34,8 @@ router.get(
 );
 // Authenticated: Get my active WatchSpaces
 router.get("/my-active", authenticate, getMyActiveWatchSpacesController);
+
+router.get("/my-ended", authenticate, getMyEndedWatchSpacesController);
 // Authenticated: Get WatchSpace details
 router.get(
   "/:watchSpaceId",

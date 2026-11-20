@@ -59,8 +59,14 @@ export const askWatchSpaceAIController = async (req, res) => {
       requestId,
     });
 
+    await WatchSpace.updateOne(
+      { _id: watchSpaceId },
+      { $inc: { aiQuestionsAsked: 1 } },
+    );
+
     return res.status(200).json({
       answer: result.answer,
+      answerMode: result.answerMode,
       sourceEvents: result.sourceEvents,
       generatedAt: result.generatedAt,
     });

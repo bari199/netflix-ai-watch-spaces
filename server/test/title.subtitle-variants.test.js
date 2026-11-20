@@ -65,7 +65,13 @@ const fixtureTitle = () => ({
     },
   ],
   subtitleVariants: [],
+
   async save() {},
+
+  toObject() {
+    const { save, toObject, ...plainTitle } = this;
+    return plainTitle;
+  },
 });
 
 const createForm = (variants, filename = "captions.vtt") => {

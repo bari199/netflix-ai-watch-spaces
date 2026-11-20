@@ -108,9 +108,7 @@ test("uses Cloudflare choices response and returns a grounded Bengali answer", a
                 message: {
                   role: "assistant",
                   content: JSON.stringify({
-                      selections: [
-                        { eventId: "evt-bengali", excerpt },
-                      ],
+                    selections: [{ eventId: "evt-bengali", excerpt }],
                   }),
                   reasoning_content: "Do not use this as the answer.",
                 },
@@ -133,10 +131,7 @@ test("uses Cloudflare choices response and returns a grounded Bengali answer", a
     "https://api.cloudflare.com/client/v4/accounts/test-account/ai/run/@cf/meta/llama-3.1-8b-instruct",
   );
   assert.equal(requestOptions.method, "POST");
-  assert.equal(
-    requestOptions.headers.Authorization,
-    "Bearer test-token",
-  );
+  assert.equal(requestOptions.headers.Authorization, "Bearer test-token");
 
   const requestBody = JSON.parse(requestOptions.body);
   assert.ok(Array.isArray(requestBody.messages));
@@ -342,10 +337,14 @@ test("returns the safe unavailable answer when Cloudflare truncates generation",
 test("throws on Cloudflare HTTP failure", async (t) => {
   configureCloudflareEnvironment(t);
   const aiClient = createCloudflareAIClient({
-    fetchImpl: async () => ({ ok: false, status: 401 }),
+    fetchImpl: async () => ({
+      ok: false,
+      status: 401,
+      text: async () => "Unauthorized",
+    }),
   });
 
-  await assert.rejects(askWith(aiClient), /failed with status 401/);
+  await assert.rejects(askWith(aiClient), /HTTP 401/);
 });
 
 test("throws on Cloudflare network failure", async (t) => {
@@ -421,7 +420,10 @@ test("returns unavailable when the model cites an event outside retrieved contex
     }),
   );
 
-  const result = await askWith(client, "What is Mara's relationship to the captain?");
+  const result = await askWith(
+    client,
+    "What is Mara's relationship to the captain?",
+  );
 
   assert.equal(
     result.answer,
@@ -501,15 +503,34 @@ test("does not allow an excerpt from one event to be attributed to another", asy
   assert.deepEqual(result.sourceEvents, []);
 });
 
+test("uses general fallback when the model returns empty evidence selections", async (t) => {
+  const responses = [
+    JSON.stringify({ selections: [] }),
+    "A general knowledge answer for this question.",
+  ];
+
+  const requests = [];
+
+  const aiClient = {
+    generate: async (request) => {
+      requests.push(request);
+      return responses.shift();
+    },
+  };
+
+  const result = await askWith(aiClient);
+
+  assert.equal(result.answerMode, "general");
+  assert.match(result.answer, /General knowledge/i);
+  assert.deepEqual(result.sourceEvents, []);
+  assert.equal(requests.length, 2);
+});
+
 test("returns unavailable for empty or malformed evidence selections", async (t) => {
   const invalidResponses = [
-    JSON.stringify({ selections: [] }),
-    "not JSON",
     JSON.stringify({ selections: [{ eventId: "evt-introduction" }] }),
     JSON.stringify({
-      selections: [
-        { eventId: "evt-introduction", excerpt: "   " },
-      ],
+      selections: [{ eventId: "evt-introduction", excerpt: "   " }],
     }),
   ];
 
@@ -536,6 +557,7 @@ test("classifies model selection diagnostics without logging evidence content", 
         parsedSelectionCount: 0,
         rejectionCategory: "empty_selection",
         finalAcceptedCitationCount: 0,
+        fallbackMode: "general",
       },
     },
     {
@@ -552,9 +574,7 @@ test("classifies model selection diagnostics without logging evidence content", 
     {
       name: "invalid_event_id",
       response: JSON.stringify({
-        selections: [
-          { eventId: "evt-not-retrieved", excerpt: "An excerpt." },
-        ],
+        selections: [{ eventId: "evt-not-retrieved", excerpt: "An excerpt." }],
       }),
       expected: {
         modelFinishReason: null,
@@ -782,19 +802,17 @@ test("deduplicates citations from verified excerpts only", async () => {
 
   const result = await askWith(client);
 
-  assert.equal(
-    result.answer,
-    "Mara enters\nobservatory.",
-  );
+  assert.equal(result.answer, "Mara enters\nobservatory.");
   assert.deepEqual(result.sourceEvents, ["evt-introduction"]);
 });
 
-test("returns unavailable without invoking the AI when retrieval has no evidence", async () => {
+test("uses general fallback when retrieval has no evidence", async () => {
   let calls = 0;
+
   const aiClient = {
     generate: async () => {
       calls += 1;
-      throw new Error("AI should not be called");
+      return "A general knowledge answer.";
     },
   };
 
@@ -806,19 +824,23 @@ test("returns unavailable without invoking the AI when retrieval has no evidence
     },
     { aiClient },
   );
-
-  assert.equal(
-    result.answer,
-    "This information is unavailable in the title metadata.",
-  );
+  assert.equal(result.answerMode, "general");
+  assert.match(result.answer, /General knowledge/i);
   assert.deepEqual(result.sourceEvents, []);
-  assert.ok(Number.isFinite(Date.parse(result.generatedAt)));
-  assert.equal(calls, 0);
+  assert.equal(calls, 1);
 });
 
 test("logs an empty timeline outcome without invoking the AI", async () => {
   const diagnostics = [];
-  const aiClient = { generate: async () => assert.fail("AI should not be called") };
+  let aiCalls = 0;
+
+  const aiClient = {
+    generate: async () => {
+      aiCalls += 1;
+      return "A general knowledge answer.";
+    },
+  };
+
   const retrieveTimelineContext = async (_input, { diagnostics: state }) => {
     Object.assign(state, {
       watchSpaceLookupOutcome: "found",
@@ -828,6 +850,7 @@ test("logs an empty timeline outcome without invoking the AI", async () => {
       temporalCandidateCount: 0,
       retrievedCandidateCount: 0,
     });
+
     return {
       currentTime: 30,
       timelineEventCount: 0,
@@ -851,6 +874,11 @@ test("logs an empty timeline outcome without invoking the AI", async () => {
   );
 
   assert.deepEqual(result.sourceEvents, []);
+  assert.equal(result.answerMode, "general");
+  assert.match(result.answer, /General knowledge/i);
+  assert.deepEqual(result.sourceEvents, []);
+  assert.equal(aiCalls, 1);
+
   assert.deepEqual(diagnostics, [
     {
       event: "watchspace.ai_qa",
@@ -867,13 +895,16 @@ test("logs an empty timeline outcome without invoking the AI", async () => {
       parsedSelectionCount: null,
       rejectionCategory: "no_timeline_events",
       finalAcceptedCitationCount: 0,
+      fallbackMode: "general",
     },
   ]);
+
   assert.equal(JSON.stringify(diagnostics).includes("private question"), false);
 });
 
 test("logs a timeline with no temporal candidates separately", async () => {
   const diagnostics = [];
+
   const retrieveTimelineContext = async (_input, { diagnostics: state }) => {
     Object.assign(state, {
       watchSpaceLookupOutcome: "found",
@@ -883,6 +914,7 @@ test("logs a timeline with no temporal candidates separately", async () => {
       temporalCandidateCount: 0,
       retrievedCandidateCount: 0,
     });
+
     return {
       currentTime: 10,
       timelineEventCount: 2,
@@ -893,8 +925,14 @@ test("logs a timeline with no temporal candidates separately", async () => {
   };
 
   await answerQuestion(
-    { question: "What happens later?", watchSpaceId: WATCH_SPACE_ID },
     {
+      question: "What happens later?",
+      watchSpaceId: WATCH_SPACE_ID,
+    },
+    {
+      aiClient: {
+        generate: async () => "A general knowledge answer.",
+      },
       retrieveTimelineContext,
       diagnosticLogger: (diagnostic) => diagnostics.push(diagnostic),
     },
@@ -909,9 +947,19 @@ test("logs a timeline with no temporal candidates separately", async () => {
 });
 
 test("does not treat temporal candidates as answer evidence without a valid model selection", async () => {
-  const { client, requests } = createMockAIClient(
+  const responses = [
     JSON.stringify({ selections: [] }),
-  );
+    "A general knowledge answer.",
+  ];
+
+  const requests = [];
+
+  const client = {
+    generate: async (request) => {
+      requests.push(request);
+      return responses.shift();
+    },
+  };
   const candidateContext = {
     events: [
       {
@@ -930,11 +978,9 @@ test("does not treat temporal candidates as answer evidence without a valid mode
     { aiClient: client },
   );
 
-  assert.equal(requests.length, 1);
-  assert.equal(
-    result.answer,
-    "This information is unavailable in the title metadata.",
-  );
+  assert.equal(requests.length, 2);
+  assert.equal(result.answerMode, "general");
+  assert.match(result.answer, /General knowledge/i);
   assert.deepEqual(result.sourceEvents, []);
 });
 

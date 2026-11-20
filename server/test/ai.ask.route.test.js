@@ -208,6 +208,7 @@ test("allows an authenticated WatchSpace host and returns the Q&A contract", asy
   assert.equal(response.status, 200);
   assert.deepEqual(Object.keys(response.body).sort(), [
     "answer",
+    "answerMode",
     "generatedAt",
     "sourceEvents",
   ]);
@@ -240,7 +241,9 @@ test("denies authenticated nonparticipants from a public WatchSpace before AI re
     t,
     createWatchSpace({ isPrivate: false }),
   );
-  const titleLookup = t.mock.method(Title, "findOne", async () => createTitle());
+  const titleLookup = t.mock.method(Title, "findOne", async () =>
+    createTitle(),
+  );
   const fetchMock = configureCloudflare(t);
   const baseUrl = await startServer(t);
 

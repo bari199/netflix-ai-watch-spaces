@@ -10,6 +10,7 @@ import titleRoutes from "./routes/title.routes.js";
 import watchSpaceRoutes from "./routes/watchSpace.routes.js";
 import recommendationRoutes from "./routes/recommendation.routes.js";
 import interactionRoutes from "./routes/interaction.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use("/api/titles", titleRoutes);
 app.use("/api/watch-spaces", watchSpaceRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/interactions", interactionRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 app.get("/api/health", (req, res) => {
   const dbStatus =
