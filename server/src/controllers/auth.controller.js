@@ -135,6 +135,7 @@ export const login = async (req, res) => {
     const result = await verifyUserCredentials({
       email,
       password,
+      expectedRole: "user",
     });
 
     res.cookie("refreshToken", result.refreshToken, refreshCookieOptions);
@@ -142,6 +143,36 @@ export const login = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Login successful",
+      accessToken: result.accessToken,
+      user: result.user,
+    });
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ==========================================
+// Admin Login
+// ==========================================
+
+export const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const result = await verifyUserCredentials({
+      email,
+      password,
+      expectedRole: "admin",
+    });
+
+    res.cookie("refreshToken", result.refreshToken, refreshCookieOptions);
+
+    return res.status(200).json({
+      success: true,
+      message: "Admin login successful",
       accessToken: result.accessToken,
       user: result.user,
     });

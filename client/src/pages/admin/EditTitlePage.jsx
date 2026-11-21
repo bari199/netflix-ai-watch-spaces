@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+
 import api from "../../api/axios.js";
+
 import VariationTimelineEditor from "../../components/admin/VariationTimelineEditor.jsx";
 import SubtitleVariantEditor from "../../components/admin/SubtitleVariantEditor.jsx";
+
 import {
   normalizeTimelineForSubmission,
   validateTimelineMetadata,
 } from "../../utils/timelineMetadata.js";
+
 import {
   prepareSubtitleVariantSubmission,
   validateSubtitleVariants,
@@ -19,6 +23,11 @@ const API_BASE_URL = (
 const EditTitlePage = () => {
   const { titleId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Read draft status directly from URL.
+  const isDraft =
+    new URLSearchParams(location.search).get("status") === "draft";
 
   const [formData, setFormData] = useState({
     name: "",
@@ -31,15 +40,19 @@ const EditTitlePage = () => {
 
   const [timeline, setTimeline] = useState([]);
   const [subtitleVariants, setSubtitleVariants] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
   const [existingVideoKey, setExistingVideoKey] = useState("");
   const [existingThumbnailKey, setExistingThumbnailKey] = useState("");
+
   const [video, setVideo] = useState(null);
   const [thumbnail, setThumbnail] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState("");
 
+  // Fetch title or draft according to URL status.
   useEffect(() => {
     let isMounted = true;
 
@@ -48,7 +61,11 @@ const EditTitlePage = () => {
         setLoading(true);
         setError("");
 
-        const response = await api.get(`/titles/${titleId}`);
+        const endpoint = isDraft
+          ? `/titles/drafts/${titleId}`
+          : `/titles/${titleId}`;
+
+        const response = await api.get(endpoint);
         const title = response.data?.title;
 
         if (!title) {
@@ -67,8 +84,10 @@ const EditTitlePage = () => {
         });
 
         setTimeline(Array.isArray(title.timeline) ? title.timeline : []);
+
         setExistingVideoKey(title.videoKey || "");
         setExistingThumbnailKey(title.thumbnailKey || "");
+
         setSubtitleVariants(
           (Array.isArray(title.subtitleVariants)
             ? title.subtitleVariants
@@ -97,7 +116,9 @@ const EditTitlePage = () => {
           );
         }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -106,8 +127,9 @@ const EditTitlePage = () => {
     return () => {
       isMounted = false;
     };
-  }, [titleId]);
+  }, [titleId, isDraft]);
 
+  // Revoke temporary thumbnail preview URL.
   useEffect(() => {
     return () => {
       if (thumbnailPreview.startsWith("blob:")) {
@@ -116,6 +138,7 @@ const EditTitlePage = () => {
     };
   }, [thumbnailPreview]);
 
+  // Handle normal form fields.
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
 
@@ -125,8 +148,10 @@ const EditTitlePage = () => {
     }));
   };
 
+  // Handle thumbnail selection.
   const handleThumbnailChange = (event) => {
     const file = event.target.files?.[0];
+
     if (!file) return;
 
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
@@ -146,10 +171,12 @@ const EditTitlePage = () => {
       if (previous.startsWith("blob:")) {
         URL.revokeObjectURL(previous);
       }
+
       return previewUrl;
     });
   };
 
+  // Handle video selection.
   const handleVideoChange = (event) => {
     const file = event.target.files?.[0] || null;
 
@@ -166,6 +193,7 @@ const EditTitlePage = () => {
     setVideo(file);
   };
 
+  // Save title changes.
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -219,8 +247,13 @@ const EditTitlePage = () => {
         releaseYear: formData.releaseYear
           ? Number(formData.releaseYear)
           : undefined,
-        isPublished: formData.isPublished,
       };
+
+      // Published titles can update their publication status.
+      // Draft updates must not send isPublished.
+      if (!isDraft) {
+        payload.isPublished = formData.isPublished;
+      }
 
       const normalizedTimeline = normalizeTimelineForSubmission(timeline);
 
@@ -245,18 +278,28 @@ const EditTitlePage = () => {
         data.append("video", video);
       }
 
-      await api.patch(`/titles/${titleId}`, data);
+      // Select the correct update endpoint.
+      const endpoint = isDraft
+        ? `/titles/drafts/${titleId}`
+        : `/titles/${titleId}`;
 
+      await api.patch(endpoint, data);
+
+      // Update subtitle variants using the existing endpoint.
       const subtitleSubmission =
         prepareSubtitleVariantSubmission(subtitleVariants);
+
       const subtitleData = new FormData();
+
       subtitleData.append(
         "variants",
         JSON.stringify(subtitleSubmission.variants),
       );
+
       subtitleSubmission.files.forEach((file) =>
         subtitleData.append("subtitleFiles", file),
       );
+
       await api.put(`/titles/${titleId}/subtitle-variants`, subtitleData);
 
       navigate("/admin/titles", { replace: true });
@@ -276,13 +319,18 @@ const EditTitlePage = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {/* Page Header */}
       <div>
-        <h1 className="text-3xl font-bold">Edit Title</h1>
+        <h1 className="text-3xl font-bold">
+          {isDraft ? "Edit Draft" : "Edit Title"}
+        </h1>
+
         <p className="mt-2 text-sm text-gray-400">
           Update title information and timeline metadata.
         </p>
       </div>
 
+      {/* Error */}
       {error && (
         <div
           role="alert"
@@ -296,8 +344,10 @@ const EditTitlePage = () => {
         onSubmit={handleSubmit}
         className="space-y-5 rounded-xl border border-white/10 bg-[#1f1f1f] p-6"
       >
+        {/* Title Name */}
         <div>
           <label className="mb-2 block text-sm font-medium">Title Name *</label>
+
           <input
             type="text"
             name="name"
@@ -308,8 +358,10 @@ const EditTitlePage = () => {
           />
         </div>
 
+        {/* Description */}
         <div>
           <label className="mb-2 block text-sm font-medium">Description</label>
+
           <textarea
             name="description"
             value={formData.description}
@@ -319,21 +371,26 @@ const EditTitlePage = () => {
           />
         </div>
 
+        {/* Video */}
         <div className="space-y-3">
           <label className="block text-sm font-medium">Current Video</label>
+
           {existingVideoKey ? (
             <>
               <p className="text-xs text-gray-400">
                 Stored as: {existingVideoKey.split("/").pop()}
               </p>
-              <video
-                controls
-                preload="metadata"
-                src={`${API_BASE_URL}/titles/${titleId}/video`}
-                className="aspect-video w-full rounded-lg border border-white/10 bg-black"
-              >
-                Your browser does not support HTML5 video.
-              </video>
+
+              {!isDraft && (
+                <video
+                  controls
+                  preload="metadata"
+                  src={`${API_BASE_URL}/titles/${titleId}/video`}
+                  className="aspect-video w-full rounded-lg border border-white/10 bg-black"
+                >
+                  Your browser does not support HTML5 video.
+                </video>
+              )}
             </>
           ) : (
             <p className="text-sm text-yellow-300">
@@ -342,16 +399,19 @@ const EditTitlePage = () => {
           )}
 
           <label className="block text-sm font-medium">Replace Video</label>
+
           <input
             type="file"
             accept="video/mp4,video/webm,video/quicktime"
             onChange={handleVideoChange}
             className="w-full rounded-lg border border-white/10 bg-[#141414] p-3 text-sm"
           />
+
           <p className="text-xs text-gray-500">
             Optional. Leave empty to keep the current video. Supported formats:
             MP4, WEBM and MOV.
           </p>
+
           {video && (
             <p className="text-sm text-green-400">
               Replacement selected: {video.name}
@@ -359,6 +419,7 @@ const EditTitlePage = () => {
           )}
         </div>
 
+        {/* Thumbnail */}
         <div>
           <label className="mb-2 block text-sm font-medium">
             Existing Thumbnail
@@ -369,6 +430,7 @@ const EditTitlePage = () => {
               <p className="mb-2 text-xs text-gray-400">
                 Stored as: {existingThumbnailKey.split("/").pop()}
               </p>
+
               <img
                 src={thumbnailPreview}
                 alt="Current title thumbnail"
@@ -384,6 +446,7 @@ const EditTitlePage = () => {
           <label className="mb-2 block text-sm font-medium">
             Replace Thumbnail
           </label>
+
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -394,6 +457,7 @@ const EditTitlePage = () => {
           <p className="mt-2 text-xs text-gray-500">
             Optional. Leave empty to keep the current thumbnail.
           </p>
+
           {thumbnail && (
             <p className="mt-2 text-sm text-green-400">
               Replacement selected: {thumbnail.name}
@@ -401,8 +465,10 @@ const EditTitlePage = () => {
           )}
         </div>
 
+        {/* Genres */}
         <div>
           <label className="mb-2 block text-sm font-medium">Genres</label>
+
           <input
             type="text"
             name="genre"
@@ -413,11 +479,13 @@ const EditTitlePage = () => {
           />
         </div>
 
+        {/* Release Year and Duration */}
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium">
               Release Year
             </label>
+
             <input
               type="number"
               name="releaseYear"
@@ -432,6 +500,7 @@ const EditTitlePage = () => {
             <label className="mb-2 block text-sm font-medium">
               Duration (seconds) *
             </label>
+
             <input
               type="number"
               name="duration"
@@ -444,36 +513,46 @@ const EditTitlePage = () => {
           </div>
         </div>
 
+        {/* Timeline Editor */}
         <VariationTimelineEditor
           timeline={timeline}
           onChange={setTimeline}
           duration={formData.duration}
         />
 
+        {/* Subtitle Editor */}
         <SubtitleVariantEditor
           variants={subtitleVariants}
           onChange={setSubtitleVariants}
           timeline={timeline}
         />
 
-        <label className="flex items-center gap-3 text-sm">
-          <input
-            type="checkbox"
-            name="isPublished"
-            checked={formData.isPublished}
-            onChange={handleChange}
-            className="h-4 w-4 accent-red-600"
-          />
-          Publish this title
-        </label>
+        {/* Publish Checkbox: only for published-title editing */}
+        {!isDraft && (
+          <label className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              name="isPublished"
+              checked={formData.isPublished}
+              onChange={handleChange}
+              className="h-4 w-4 accent-red-600"
+            />
+            Publish this title
+          </label>
+        )}
 
+        {/* Actions */}
         <div className="flex flex-wrap gap-3 border-t border-white/10 pt-5">
           <button
             type="submit"
             disabled={saving}
             className="rounded-lg bg-red-600 px-6 py-3 text-sm font-semibold transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {saving
+              ? "Saving..."
+              : isDraft
+                ? "Save Draft Changes"
+                : "Save Changes"}
           </button>
 
           <button

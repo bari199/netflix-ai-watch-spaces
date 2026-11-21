@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Clapperboard, Pencil, Trash2, Loader2, ImageOff } from "lucide-react";
+
 import api from "../../api/axios.js";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
 import { ErrorAlert, PageHeader } from "../../components/admin/adminUi.jsx";
 
 const API_BASE_URL =
@@ -28,12 +32,26 @@ const rowGrid =
 
 const listVariants = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.06 } },
+  show: {
+    transition: {
+      staggerChildren: 0.06,
+    },
+  },
 };
 
 const rowVariants = {
-  hidden: { opacity: 0, y: 14 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+  hidden: {
+    opacity: 0,
+    y: 14,
+  },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.35,
+      ease: "easeOut",
+    },
+  },
 };
 
 const TitleListPage = () => {
@@ -42,25 +60,46 @@ const TitleListPage = () => {
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [titleToDelete, setTitleToDelete] = useState(null);
+  const [publishingId, setPublishingId] = useState(null);
+  // Published / Drafts tab
+  const [activeTab, setActiveTab] = useState("published");
 
+  // Fetch titles according to the active tab
   useEffect(() => {
+    let isMounted = true;
+
     const fetchTitles = async () => {
       try {
         setLoading(true);
         setError("");
 
-        const response = await api.get("/titles");
-        setTitles(response.data.titles || []);
+        const endpoint = activeTab === "drafts" ? "/titles/drafts" : "/titles";
+
+        const response = await api.get(endpoint);
+
+        if (isMounted) {
+          setTitles(response.data.titles || []);
+        }
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to load titles.");
+        if (isMounted) {
+          setTitles([]);
+          setError(err.response?.data?.message || "Failed to fetch titles.");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchTitles();
-  }, []);
 
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab]);
+
+  // Delete title
   const handleDelete = async (titleId) => {
     try {
       setDeletingId(titleId);
@@ -78,15 +117,37 @@ const TitleListPage = () => {
     }
   };
 
-  // Delete is confirmed in the dialog (replaces window.confirm)
+  // Publish draft title
+  const handlePublish = async (titleId) => {
+    try {
+      setPublishingId(titleId);
+      setError("");
+
+      await api.patch(`/titles/drafts/${titleId}/publish`);
+
+      // Remove the published title from the current Drafts list
+      setTitles((prevTitles) =>
+        prevTitles.filter((title) => title._id !== titleId),
+      );
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to publish title.");
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
+  // Delete confirmation
   const confirmDelete = async () => {
     if (!titleToDelete) return;
 
     const titleId = titleToDelete._id;
+
     setTitleToDelete(null);
+
     await handleDelete(titleId);
   };
 
+  // Format duration
   const formatDuration = (seconds) => {
     if (!seconds) return "N/A";
 
@@ -98,12 +159,13 @@ const TitleListPage = () => {
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
       <PageHeader
         eyebrow="Content"
         title="Manage Titles"
         description="Manage your movies and streaming content."
       >
-        {!loading && titles.length > 0 && (
+        {!loading && (
           <Badge
             variant="outline"
             className="border-white/15 bg-white/[0.04] px-3 py-1 text-zinc-300"
@@ -113,13 +175,45 @@ const TitleListPage = () => {
         )}
       </PageHeader>
 
+      {/* Published / Drafts Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant={activeTab === "published" ? "default" : "outline"}
+          onClick={() => setActiveTab("published")}
+          className={
+            activeTab === "published"
+              ? "bg-red-600 text-white hover:bg-red-700"
+              : "border-white/15 bg-transparent text-zinc-300 hover:bg-white/10 hover:text-white"
+          }
+        >
+          Published
+        </Button>
+
+        <Button
+          type="button"
+          variant={activeTab === "drafts" ? "default" : "outline"}
+          onClick={() => setActiveTab("drafts")}
+          className={
+            activeTab === "drafts"
+              ? "bg-red-600 text-white hover:bg-red-700"
+              : "border-white/15 bg-transparent text-zinc-300 hover:bg-white/10 hover:text-white"
+          }
+        >
+          Drafts
+        </Button>
+      </div>
+
+      {/* Error */}
       <ErrorAlert message={error} />
 
+      {/* Loading */}
       {loading ? (
         <Card className="divide-y divide-white/10 border-white/10 bg-[#181818]">
           {[0, 1, 2, 3].map((item) => (
             <div key={item} className={`${rowGrid} p-4`}>
               <Skeleton className="aspect-video w-full rounded-md bg-white/10" />
+
               <div className="space-y-2.5">
                 <Skeleton className="h-4 w-2/3 bg-white/10" />
                 <Skeleton className="h-3 w-1/2 bg-white/10" />
@@ -128,6 +222,7 @@ const TitleListPage = () => {
           ))}
         </Card>
       ) : titles.length === 0 ? (
+        /* Empty State */
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -136,15 +231,33 @@ const TitleListPage = () => {
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] text-zinc-400">
               <Clapperboard size={26} />
             </div>
-            <p className="text-base font-medium text-white">No titles found.</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Titles you add will appear here.
+
+            <p className="text-base font-medium text-white">
+              {activeTab === "drafts"
+                ? "No drafts found."
+                : "No published titles found."}
             </p>
+
+            <p className="mt-1 text-sm text-zinc-500">
+              {activeTab === "drafts"
+                ? "Titles saved as drafts will appear here."
+                : "Published titles will appear here."}
+            </p>
+
+            {activeTab === "drafts" && (
+              <Button
+                asChild
+                className="mt-5 bg-red-600 text-white hover:bg-red-700"
+              >
+                <Link to="/admin/titles/create">Create New Title</Link>
+              </Button>
+            )}
           </Card>
         </motion.div>
       ) : (
+        /* Titles List */
         <Card className="overflow-hidden border-white/10 bg-[#181818] shadow-xl shadow-black/20">
-          {/* Column headers (desktop only) */}
+          {/* Column Headers */}
           <div
             className={`${rowGrid} hidden border-b border-white/10 bg-[#202020] px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 lg:grid`}
           >
@@ -167,7 +280,11 @@ const TitleListPage = () => {
                 <motion.li
                   key={title._id}
                   variants={rowVariants}
-                  exit={{ opacity: 0, x: -24, transition: { duration: 0.2 } }}
+                  exit={{
+                    opacity: 0,
+                    x: -24,
+                    transition: { duration: 0.2 },
+                  }}
                   layout
                   className={`${rowGrid} p-4 transition-colors hover:bg-white/[0.03]`}
                 >
@@ -223,6 +340,25 @@ const TitleListPage = () => {
                       </span>
                     </div>
 
+                    {activeTab === "drafts" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handlePublish(title._id)}
+                        disabled={publishingId === title._id}
+                        className="gap-1.5 bg-green-600 text-white hover:bg-green-700"
+                      >
+                        {publishingId === title._id ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Publishing...
+                          </>
+                        ) : (
+                          "Publish"
+                        )}
+                      </Button>
+                    )}
+
                     {/* Actions */}
                     <div className="flex items-center gap-2 lg:justify-end">
                       <Button
@@ -231,7 +367,11 @@ const TitleListPage = () => {
                         size="sm"
                         className="gap-1.5 border-white/15 bg-transparent text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
                       >
-                        <Link to={`/admin/titles/${title._id}/edit`}>
+                        <Link
+                          to={`/admin/titles/${title._id}/edit${
+                            activeTab === "drafts" ? "?status=draft" : ""
+                          }`}
+                        >
                           <Pencil size={14} />
                           Edit
                         </Link>
@@ -266,7 +406,7 @@ const TitleListPage = () => {
         </Card>
       )}
 
-      {/* Delete confirmation */}
+      {/* Delete Confirmation */}
       <AlertDialog
         open={Boolean(titleToDelete)}
         onOpenChange={(open) => {
@@ -276,6 +416,7 @@ const TitleListPage = () => {
         <AlertDialogContent className="border-white/10 bg-[#181818] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this title?</AlertDialogTitle>
+
             <AlertDialogDescription className="text-zinc-400">
               Are you sure you want to delete{" "}
               <span className="font-medium text-white">
@@ -284,10 +425,12 @@ const TitleListPage = () => {
               ? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
             <AlertDialogCancel className="border-white/15 bg-transparent text-white hover:bg-white/10 hover:text-white">
               Cancel
             </AlertDialogCancel>
+
             <AlertDialogAction
               onClick={confirmDelete}
               className="bg-red-600 text-white hover:bg-red-700"

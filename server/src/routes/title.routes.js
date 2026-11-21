@@ -17,6 +17,11 @@ import {
   getTitleVideoController,
   updateTitleSubtitleVariantsController,
   getTitleSubtitleController,
+  createDraftTitleController,
+  getDraftTitlesController,
+  getDraftTitleByIdController,
+  updateDraftTitleController,
+  publishDraftTitleController,
 } from "../controllers/title.controller.js";
 
 const router = express.Router();
@@ -60,6 +65,64 @@ const handleSubtitleUpload = (req, res, next) => {
     return next(error);
   });
 };
+
+// ==========================================
+// Admin: Draft Title Management
+// ==========================================
+
+// Create draft
+router.post(
+  "/drafts",
+  authenticate,
+  authorizeRoles("admin"),
+  handleUpload([
+    { name: "video", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 },
+  ]),
+  createDraftTitleController,
+);
+
+// Get all drafts
+router.get(
+  "/drafts",
+  authenticate,
+  authorizeRoles("admin"),
+  getDraftTitlesController,
+);
+
+// Get single draft
+router.get(
+  "/drafts/:titleId",
+  authenticate,
+  authorizeRoles("admin"),
+  param("titleId").isMongoId().withMessage("Invalid title ID"),
+  validate,
+  getDraftTitleByIdController,
+);
+
+// Update draft
+router.patch(
+  "/drafts/:titleId",
+  authenticate,
+  authorizeRoles("admin"),
+  handleUpload([
+    { name: "video", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 },
+  ]),
+  param("titleId").isMongoId().withMessage("Invalid title ID"),
+  validate,
+  updateDraftTitleController,
+);
+
+// Publish draft
+router.patch(
+  "/drafts/:titleId/publish",
+  authenticate,
+  authorizeRoles("admin"),
+  param("titleId").isMongoId().withMessage("Invalid title ID"),
+  validate,
+  publishDraftTitleController,
+);
 
 // Public: Get all published titles
 router.get("/", getPublishedTitlesController);

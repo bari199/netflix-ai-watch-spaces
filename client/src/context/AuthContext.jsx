@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import {
   loginUser,
+  adminLoginUser,
   logoutUser,
   refreshSession,
   getCurrentUser,
@@ -15,7 +16,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session when application starts
   useEffect(() => {
     const restoreSession = async () => {
       try {
@@ -44,6 +44,12 @@ export const AuthProvider = ({ children }) => {
     return response;
   };
 
+  const adminLogin = async (credentials) => {
+    const response = await adminLoginUser(credentials);
+    setUser(response.user);
+    return response;
+  };
+
   const logout = async () => {
     try {
       await logoutUser();
@@ -57,6 +63,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     isAuthenticated: Boolean(user),
     login,
+    adminLogin,
     logout,
     setUser,
   };

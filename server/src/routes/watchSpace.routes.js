@@ -2,8 +2,11 @@ import express from "express";
 import { param, body } from "express-validator";
 
 import authenticate from "../middleware/auth.middleware.js";
-import { authorizeWatchSpaceHost } from "../middleware/role.middleware.js";
+import authorizeRoles, {
+  authorizeWatchSpaceHost,
+} from "../middleware/role.middleware.js";
 import validate from "../middleware/validate.middleware.js";
+
 import { askWatchSpaceAIController } from "../controllers/ai.controller.js";
 
 import {
@@ -24,31 +27,69 @@ import {
 
 const router = express.Router();
 
-// Public: Get active WatchSpaces
+// Only Viewer and Host accounts can access WatchSpace APIs.
+const allowWatchSpaceUsers = authorizeRoles("viewer", "host");
+
+// ==========================================
+// Public: Get Active WatchSpaces
+// ==========================================
+
 router.get("/", getActiveWatchSpacesController);
+
+// ==========================================
+// Get Upcoming Scheduled WatchSpaces
+// ==========================================
 
 router.get(
   "/upcoming",
   authenticate,
+  allowWatchSpaceUsers,
   getUpcomingScheduledWatchSpacesController,
 );
-// Authenticated: Get my active WatchSpaces
-router.get("/my-active", authenticate, getMyActiveWatchSpacesController);
 
-router.get("/my-ended", authenticate, getMyEndedWatchSpacesController);
-// Authenticated: Get WatchSpace details
+// ==========================================
+// Get My Active WatchSpaces
+// ==========================================
+
+router.get(
+  "/my-active",
+  authenticate,
+  allowWatchSpaceUsers,
+  getMyActiveWatchSpacesController,
+);
+
+// ==========================================
+// Get My Ended WatchSpaces
+// ==========================================
+
+router.get(
+  "/my-ended",
+  authenticate,
+  allowWatchSpaceUsers,
+  getMyEndedWatchSpacesController,
+);
+
+// ==========================================
+// Get WatchSpace Details
+// ==========================================
+
 router.get(
   "/:watchSpaceId",
   authenticate,
+  allowWatchSpaceUsers,
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   validate,
   getWatchSpaceByIdController,
 );
 
-// Authenticated WatchSpace host/participant: Ask the AI co-pilot
+// ==========================================
+// Ask AI Co-pilot
+// ==========================================
+
 router.post(
   "/:watchSpaceId/ai/ask",
   authenticate,
+  allowWatchSpaceUsers,
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   body("question")
     .isString()
@@ -61,11 +102,15 @@ router.post(
   askWatchSpaceAIController,
 );
 
-// Authenticated users: Create WatchSpace
-// The creator automatically becomes the Host of this WatchSpace.
+// ==========================================
+// Create WatchSpace
+// Creator automatically becomes Host.
+// ==========================================
+
 router.post(
   "/",
   authenticate,
+  allowWatchSpaceUsers,
 
   body("titleId").isMongoId().withMessage("Invalid Title ID"),
 
@@ -95,39 +140,55 @@ router.post(
   createWatchSpaceController,
 );
 
-// Authenticated: Join WatchSpace
+// ==========================================
+// Join WatchSpace
+// ==========================================
+
 router.post(
   "/:watchSpaceId/join",
   authenticate,
+  allowWatchSpaceUsers,
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   body("inviteCode").optional().isString(),
   validate,
   joinWatchSpaceController,
 );
 
-// Authenticated: Leave WatchSpace
+// ==========================================
+// Leave WatchSpace
+// ==========================================
+
 router.post(
   "/:watchSpaceId/leave",
   authenticate,
+  allowWatchSpaceUsers,
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   validate,
   leaveWatchSpaceController,
 );
 
-// Current WatchSpace Host/Admin: End WatchSpace
+// ==========================================
+// End WatchSpace (Current Host Only)
+// ==========================================
+
 router.post(
   "/:watchSpaceId/end",
   authenticate,
+  allowWatchSpaceUsers,
   authorizeWatchSpaceHost,
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   validate,
   endWatchSpaceController,
 );
 
-// Current WatchSpace Host/Admin: Mute or Unmute Participant
+// ==========================================
+// Mute or Unmute Participant
+// ==========================================
+
 router.patch(
   "/:watchSpaceId/participants/:participantId/mute",
   authenticate,
+  allowWatchSpaceUsers,
   authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
@@ -142,10 +203,14 @@ router.patch(
   setParticipantMuteController,
 );
 
-// Current WatchSpace Host/Admin: Remove Participant
+// ==========================================
+// Remove Participant
+// ==========================================
+
 router.delete(
   "/:watchSpaceId/participants/:participantId",
   authenticate,
+  allowWatchSpaceUsers,
   authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
@@ -156,10 +221,14 @@ router.delete(
   removeParticipantController,
 );
 
-// Current WatchSpace Host/Admin: Lock or Unlock WatchSpace
+// ==========================================
+// Lock or Unlock WatchSpace
+// ==========================================
+
 router.patch(
   "/:watchSpaceId/lock",
   authenticate,
+  allowWatchSpaceUsers,
   authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
@@ -172,10 +241,14 @@ router.patch(
   setWatchSpaceLockController,
 );
 
-// Current WatchSpace Host/Admin: Transfer WatchSpace Host
+// ==========================================
+// Transfer WatchSpace Host
+// ==========================================
+
 router.patch(
   "/:watchSpaceId/transfer-host",
   authenticate,
+  allowWatchSpaceUsers,
   authorizeWatchSpaceHost,
 
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),

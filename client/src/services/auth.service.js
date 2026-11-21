@@ -111,3 +111,15 @@ export const verifyEmail = async (email, token) => {
 
   return response.data;
 };
+
+// ==========================================
+// Admin Login
+// ==========================================
+
+export const adminLoginUser = async (credentials) => {
+  const response = await api.post("/auth/admin/login", credentials);
+
+  setAccessToken(response.data.accessToken);
+
+  return response.data;
+};

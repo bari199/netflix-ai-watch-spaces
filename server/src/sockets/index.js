@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+
 import registerRoomHandlers from "./room.socket.js";
 import registerPlaybackHandlers from "./playback.socket.js";
 import registerChatHandlers from "./chat.socket.js";
@@ -33,8 +34,16 @@ const initializeSocket = (httpServer) => {
         return next(new Error("User no longer exists"));
       }
 
+      // Admin accounts cannot access WatchSpace Socket.IO.
+      if (user.role === "admin") {
+        return next(
+          new Error("Admin accounts cannot access WatchSpace connections"),
+        );
+      }
+
       socket.user = user;
       socket.data.userId = user._id.toString();
+
       next();
     } catch (error) {
       console.error("Socket authentication error:", error.message);
@@ -42,11 +51,10 @@ const initializeSocket = (httpServer) => {
     }
   });
 
-  // Handle authenticated socket connections
+  // Handle authenticated Viewer and Host connections
   io.on("connection", (socket) => {
     console.log(`Socket connected: ${socket.user._id}`);
 
-    // Register WatchSpace room events
     registerRoomHandlers(io, socket);
     registerPlaybackHandlers(io, socket);
     registerChatHandlers(io, socket);

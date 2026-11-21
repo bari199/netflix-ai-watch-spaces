@@ -63,7 +63,11 @@ export const registerUser = async ({ name, email, password, avatarFile }) => {
 // Verify Login Credentials
 // ==========================================
 
-export const verifyUserCredentials = async ({ email, password }) => {
+export const verifyUserCredentials = async ({
+  email,
+  password,
+  expectedRole = "user",
+}) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   const user = await User.findOne({
@@ -82,6 +86,16 @@ export const verifyUserCredentials = async ({ email, password }) => {
 
   if (!user.isEmailVerified) {
     throw new Error("Please verify your email before logging in");
+  }
+
+  // Admin login accepts only Admin accounts.
+  if (expectedRole === "admin" && user.role !== "admin") {
+    throw new Error("Invalid email or password");
+  }
+
+  // Public login accepts only Viewer and Host accounts.
+  if (expectedRole === "user" && !["viewer", "host"].includes(user.role)) {
+    throw new Error("Invalid email or password");
   }
 
   return createTokenPair(user);

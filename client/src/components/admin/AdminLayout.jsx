@@ -1,29 +1,66 @@
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+
 import { AnimatePresence, motion } from "motion/react";
-import { Film, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+
+import {
+  Film,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  X,
+  Plus,
+  FileEdit,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+
 import { useAuth } from "../../context/AuthContext.jsx";
 
+// ==========================================
+// Admin Navigation Items
+// ==========================================
+
 const navItems = [
-  { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
-  { label: "Manage Titles", path: "/admin/titles", icon: Film },
+  {
+    label: "Dashboard",
+    path: "/admin",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Manage Titles",
+    path: "/admin/titles",
+    icon: Film,
+  },
+  {
+    label: "Create Title",
+    path: "/admin/titles/create",
+    icon: Plus,
+  },
+  { label: "Draft Titles", path: "/admin/titles/drafts", icon: FileEdit },
 ];
+
+// ==========================================
+// Sidebar Content
+// ==========================================
 
 const SidebarContent = ({ user, onLogout, onNavigate, variant }) => (
   <div className="flex h-full flex-col">
+    {/* Logo */}
     <div className="flex items-center justify-between px-5 pb-6 pt-6">
       <div>
         <span className="text-2xl font-black tracking-[-1.5px] text-[#e50914]">
           NETFLIX
         </span>
+
         <p className="mt-0.5 text-[10px] font-bold tracking-[3px] text-zinc-500">
           ADMIN CONSOLE
         </p>
       </div>
     </div>
 
+    {/* Navigation */}
     <nav className="flex flex-1 flex-col gap-1.5 px-3">
       <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
         Menu
@@ -52,10 +89,16 @@ const SidebarContent = ({ user, onLogout, onNavigate, variant }) => (
                   <motion.span
                     layoutId={`admin-nav-active-${variant}`}
                     className="absolute inset-0 rounded-lg bg-gradient-to-r from-red-600 to-red-700 shadow-lg shadow-red-950/40"
-                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 350,
+                      damping: 30,
+                    }}
                   />
                 )}
+
                 <Icon size={18} className="relative z-10" />
+
                 <span className="relative z-10">{item.label}</span>
               </>
             )}
@@ -64,6 +107,7 @@ const SidebarContent = ({ user, onLogout, onNavigate, variant }) => (
       })}
     </nav>
 
+    {/* Admin Profile & Logout */}
     <div className="p-4">
       <Separator className="mb-4 bg-white/10" />
 
@@ -71,10 +115,12 @@ const SidebarContent = ({ user, onLogout, onNavigate, variant }) => (
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-800 text-sm font-bold text-white">
           {(user?.name || "A").charAt(0).toUpperCase()}
         </div>
+
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-white">
             {user?.name || "Administrator"}
           </p>
+
           <p className="text-xs text-zinc-500">Administrator</p>
         </div>
       </div>
@@ -92,25 +138,42 @@ const SidebarContent = ({ user, onLogout, onNavigate, variant }) => (
   </div>
 );
 
+// ==========================================
+// Admin Layout
+// ==========================================
+
 const AdminLayout = () => {
   const { user, logout } = useAuth();
+
   const navigate = useNavigate();
   const location = useLocation();
+
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Logout Handler
   const handleLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
+    try {
+      await logout();
+      navigate("/admin/login", { replace: true });
+    } catch (error) {
+      console.error("Admin logout failed:", error);
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#0b0b0c] text-white md:flex">
-      {/* Desktop sidebar */}
+      {/* ======================================
+          Desktop Sidebar
+      ====================================== */}
+
       <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#101010] md:sticky md:top-0 md:block md:h-screen">
         <SidebarContent user={user} onLogout={handleLogout} variant="desktop" />
       </aside>
 
-      {/* Mobile top bar */}
+      {/* ======================================
+          Mobile Top Bar
+      ====================================== */}
+
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-[#101010]/90 px-4 backdrop-blur-xl md:hidden">
         <span className="text-xl font-black tracking-[-1px] text-[#e50914]">
           NETFLIX
@@ -131,10 +194,14 @@ const AdminLayout = () => {
         </Button>
       </header>
 
-      {/* Mobile drawer */}
+      {/* ======================================
+          Mobile Drawer
+      ====================================== */}
+
       <AnimatePresence>
         {mobileOpen && (
           <>
+            {/* Backdrop */}
             <motion.div
               key="backdrop"
               initial={{ opacity: 0 }}
@@ -143,12 +210,18 @@ const AdminLayout = () => {
               onClick={() => setMobileOpen(false)}
               className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm md:hidden"
             />
+
+            {/* Drawer */}
             <motion.aside
               key="drawer"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
-              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              transition={{
+                type: "spring",
+                stiffness: 320,
+                damping: 34,
+              }}
               className="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] border-r border-white/10 bg-[#101010] shadow-2xl md:hidden"
             >
               <Button
@@ -161,6 +234,7 @@ const AdminLayout = () => {
               >
                 <X size={20} />
               </Button>
+
               <SidebarContent
                 user={user}
                 onLogout={handleLogout}
@@ -172,12 +246,19 @@ const AdminLayout = () => {
         )}
       </AnimatePresence>
 
+      {/* ======================================
+          Main Content
+      ====================================== */}
+
       <main className="min-w-0 flex-1">
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          transition={{
+            duration: 0.3,
+            ease: "easeOut",
+          }}
           className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8"
         >
           <Outlet />

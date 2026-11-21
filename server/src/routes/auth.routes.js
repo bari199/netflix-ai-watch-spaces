@@ -5,6 +5,7 @@ import passport from "../config/passport.js";
 import {
   register,
   login,
+  adminLogin,
   refresh,
   logout,
   verifyEmailController,
@@ -84,6 +85,12 @@ router.post(
 // ==========================================
 
 router.post("/login", loginValidation, validate, login);
+
+// ==========================================
+// Admin Login
+// ==========================================
+
+router.post("/admin/login", loginValidation, validate, adminLogin);
 
 // ==========================================
 // Forgot Password

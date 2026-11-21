@@ -1,8 +1,13 @@
 import {
   createTitle,
+  createDraftTitle,
   getPublishedTitles,
+  getDraftTitles,
+  getDraftTitleById,
   getTitleById,
   updateTitle,
+  updateDraftTitle,
+  publishDraftTitle,
   deleteTitle,
   getTitleThumbnail,
   getTitleVideo,
@@ -101,6 +106,105 @@ export const createTitleController = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Title created successfully",
+      title,
+    });
+  } catch (error) {
+    return handleTitleError(res, error);
+  }
+};
+
+// Create a new draft title
+export const createDraftTitleController = async (req, res) => {
+  try {
+    const videoFile = req.files?.video?.[0];
+    const thumbnailFile = req.files?.thumbnail?.[0];
+
+    if (!videoFile) {
+      return res.status(400).json({
+        success: false,
+        message: "Video file is required",
+      });
+    }
+
+    const titleData = parseTitleJsonFields(req.body);
+
+    const title = await createDraftTitle(
+      titleData,
+      req.user._id,
+      videoFile,
+      thumbnailFile,
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Draft saved successfully",
+      title,
+    });
+  } catch (error) {
+    return handleTitleError(res, error);
+  }
+};
+
+// Get all draft titles
+export const getDraftTitlesController = async (req, res) => {
+  try {
+    const titles = await getDraftTitles();
+
+    return res.status(200).json({
+      success: true,
+      count: titles.length,
+      titles,
+    });
+  } catch (error) {
+    return handleTitleError(res, error);
+  }
+};
+
+// Get a single draft title
+export const getDraftTitleByIdController = async (req, res) => {
+  try {
+    const title = await getDraftTitleById(req.params.titleId);
+
+    return res.status(200).json({
+      success: true,
+      title,
+    });
+  } catch (error) {
+    return handleTitleError(res, error);
+  }
+};
+
+// Update an existing draft
+export const updateDraftTitleController = async (req, res) => {
+  try {
+    const videoFile = req.files?.video?.[0];
+    const thumbnailFile = req.files?.thumbnail?.[0];
+
+    const updates = parseTitleJsonFields(req.body);
+
+    if (videoFile) updates.videoFile = videoFile;
+    if (thumbnailFile) updates.thumbnailFile = thumbnailFile;
+
+    const title = await updateDraftTitle(req.params.titleId, updates);
+
+    return res.status(200).json({
+      success: true,
+      message: "Draft updated successfully",
+      title,
+    });
+  } catch (error) {
+    return handleTitleError(res, error);
+  }
+};
+
+// Publish an existing draft
+export const publishDraftTitleController = async (req, res) => {
+  try {
+    const title = await publishDraftTitle(req.params.titleId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Title published successfully",
       title,
     });
   } catch (error) {

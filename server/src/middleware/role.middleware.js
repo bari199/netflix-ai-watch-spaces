@@ -31,9 +31,12 @@ const authorizeWatchSpaceHost = async (req, res, next) => {
       });
     }
 
-    // Preserve existing Admin permissions
+    // Admin accounts cannot manage WatchSpaces.
     if (req.user.role === "admin") {
-      return next();
+      return res.status(403).json({
+        success: false,
+        message: "Admin accounts cannot access WatchSpace host actions",
+      });
     }
 
     const watchSpace = await WatchSpace.findById(

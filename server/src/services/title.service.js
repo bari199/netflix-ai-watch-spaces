@@ -920,3 +920,89 @@ export const getTitleVideo = async (titleId, rangeHeader) => {
     FileSize: fileSize,
   };
 };
+
+// Create a draft title — always remains unpublished
+export const createDraftTitle = async (
+  titleData,
+  userId,
+  videoFile,
+  thumbnailFile,
+) => {
+  return createTitle(
+    {
+      ...titleData,
+      isPublished: false,
+    },
+    userId,
+    videoFile,
+    thumbnailFile,
+  );
+};
+
+// Get all draft titles
+export const getDraftTitles = async () => {
+  return Title.find({ isPublished: false })
+    .select("-subtitleVariants.storageKey")
+    .sort({ updatedAt: -1 });
+};
+
+// Get a single draft title by ID
+export const getDraftTitleById = async (titleId) => {
+  const title = await Title.findOne({
+    _id: titleId,
+    isPublished: false,
+  }).select("-subtitleVariants.storageKey");
+
+  if (!title) {
+    throw new Error("Draft title not found");
+  }
+
+  return title;
+};
+
+
+// Update an existing draft without allowing it to be published
+export const updateDraftTitle = async (titleId, updates) => {
+  if (
+    !updates ||
+    typeof updates !== "object" ||
+    Array.isArray(updates) ||
+    Object.prototype.hasOwnProperty.call(updates, "isPublished")
+  ) {
+    throw new Error("Invalid draft update data");
+  }
+
+  const draft = await Title.findOne({
+    _id: titleId,
+    isPublished: false,
+  });
+
+  if (!draft) {
+    throw new Error("Draft title not found");
+  }
+
+  return updateTitle(titleId, updates);
+};
+
+// Publish an existing draft
+export const publishDraftTitle = async (titleId) => {
+  const title = await Title.findOneAndUpdate(
+    {
+      _id: titleId,
+      isPublished: false,
+    },
+    {
+      $set: { isPublished: true },
+    },
+    {
+      returnDocument: "after",
+      runValidators: true,
+    },
+  );
+
+  if (!title) {
+    throw new Error("Draft title not found or already published");
+  }
+
+  return title;
+};
