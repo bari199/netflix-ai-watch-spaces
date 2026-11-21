@@ -104,3 +104,16 @@ export const getMyEndedWatchSpaces = async () => {
   const response = await api.get("/watch-spaces/my-ended?limit=10");
   return response.data;
 };
+
+// Get all WatchSpaces hosted by the logged-in user
+export const getMyHostedWatchSpaces = async () => {
+  const response = await api.get("/watch-spaces/my-hosted?limit=50");
+  return response.data;
+};
+
+
+// Delete a WatchSpace hosted by the logged-in user
+export const deleteWatchSpace = async (watchSpaceId) => {
+  const response = await api.delete(`/watch-spaces/${watchSpaceId}`);
+  return response.data;
+};

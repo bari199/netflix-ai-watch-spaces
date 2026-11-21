@@ -8,10 +8,12 @@ import {
   setParticipantMute,
   removeParticipant,
   setWatchSpaceLock,
+  deleteWatchSpace,
   transferWatchSpaceHost,
   getUpcomingScheduledWatchSpaces as getUpcomingScheduledWatchSpacesService,
   getMyActiveWatchSpaces as getMyActiveWatchSpacesService,
   getMyEndedWatchSpaces as getMyEndedWatchSpacesService,
+  getMyHostedWatchSpaces as getMyHostedWatchSpacesService,
 } from "../services/watchSpace.service.js";
 
 const handleWatchSpaceError = (res, error) => {
@@ -49,6 +51,7 @@ const handleWatchSpaceError = (res, error) => {
     "New host must be a participant of this WatchSpace",
     "User is already the host",
     "Current host participant record not found",
+    "Only the host can delete this WatchSpace",
   ];
 
   if (error.message === "WatchSpace has reached its participant limit") {
@@ -235,6 +238,20 @@ export const endWatchSpaceController = async (req, res) => {
   }
 };
 
+// Delete WatchSpace (Current Host Only)
+export const deleteWatchSpaceController = async (req, res) => {
+  try {
+    await deleteWatchSpace(req.params.watchSpaceId, req.user._id);
+
+    return res.status(200).json({
+      success: true,
+      message: "WatchSpace deleted successfully",
+    });
+  } catch (error) {
+    return handleWatchSpaceError(res, error);
+  }
+};
+
 // Mute or Unmute Participant
 export const setParticipantMuteController = async (req, res) => {
   try {
@@ -371,6 +388,26 @@ export const getMyEndedWatchSpacesController = async (req, res) => {
     const limit = req.query.limit || 10;
 
     const watchSpaces = await getMyEndedWatchSpacesService(req.user._id, limit);
+
+    return res.status(200).json({
+      success: true,
+      count: watchSpaces.length,
+      watchSpaces,
+    });
+  } catch (error) {
+    return handleWatchSpaceError(res, error);
+  }
+};
+
+// Get all WatchSpaces hosted by the logged-in user.
+export const getMyHostedWatchSpacesController = async (req, res) => {
+  try {
+    const limit = req.query.limit || 20;
+
+    const watchSpaces = await getMyHostedWatchSpacesService(
+      req.user._id,
+      limit,
+    );
 
     return res.status(200).json({
       success: true,

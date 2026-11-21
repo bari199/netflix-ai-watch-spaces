@@ -23,6 +23,8 @@ import {
   getUpcomingScheduledWatchSpacesController,
   getMyActiveWatchSpacesController,
   getMyEndedWatchSpacesController,
+  getMyHostedWatchSpacesController,
+  deleteWatchSpaceController,
 } from "../controllers/watchSpace.controller.js";
 
 const router = express.Router();
@@ -67,6 +69,14 @@ router.get(
   authenticate,
   allowWatchSpaceUsers,
   getMyEndedWatchSpacesController,
+);
+
+// Get all WatchSpaces hosted by the logged-in user
+router.get(
+  "/my-hosted",
+  authenticate,
+  allowWatchSpaceUsers,
+  getMyHostedWatchSpacesController,
 );
 
 // ==========================================
@@ -179,6 +189,19 @@ router.post(
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   validate,
   endWatchSpaceController,
+);
+
+// ==========================================
+// Delete WatchSpace (Current Host Only)
+// ==========================================
+router.delete(
+  "/:watchSpaceId",
+  authenticate,
+  allowWatchSpaceUsers,
+  authorizeWatchSpaceHost,
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+  validate,
+  deleteWatchSpaceController,
 );
 
 // ==========================================

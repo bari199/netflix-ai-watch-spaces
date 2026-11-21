@@ -377,3 +377,34 @@ export const getMyEndedWatchSpaces = async (userId, limit = 10) => {
 
   return watchSpaces;
 };
+
+// Get all WatchSpaces currently hosted by the logged-in user.
+export const getMyHostedWatchSpaces = async (userId, limit = 20) => {
+  const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
+
+  return WatchSpace.find({
+    host: userId,
+    status: { $in: ["scheduled", "waiting", "active", "ended"] },
+  })
+    .populate("title", "name description duration thumbnailKey")
+    .populate("host", "name avatar")
+    .sort({ createdAt: -1 })
+    .limit(safeLimit);
+};
+
+// Delete a WatchSpace (Current Host Only)
+export const deleteWatchSpace = async (watchSpaceId, hostId) => {
+  const watchSpace = await WatchSpace.findById(watchSpaceId);
+
+  if (!watchSpace) {
+    throw new Error("WatchSpace not found");
+  }
+
+  if (watchSpace.host.toString() !== hostId.toString()) {
+    throw new Error("Only the host can delete this WatchSpace");
+  }
+
+  await WatchSpace.findByIdAndDelete(watchSpaceId);
+
+  return watchSpace;
+};
