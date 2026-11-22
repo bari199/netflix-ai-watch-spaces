@@ -1729,9 +1729,6 @@ const WatchPageDetails = () => {
                   actionLoading={actionLoading}
                   connectionQuality={connectionQuality}
                   connectionLatency={connectionLatency}
-                  playbackMode={watchSpace.playbackMode || "manual"}
-                  playbackModeSaving={playbackModeSaving}
-                  onPlaybackModeChange={handlePlaybackModeChange}
                   copiedInviteCode={copiedInviteCode}
                   copiedInviteLink={copiedInviteLink}
                   onCopyInviteCode={handleCopyInviteCode}
@@ -1767,6 +1764,9 @@ const WatchPageDetails = () => {
                     isHost={isHost}
                     isEnded={isEnded}
                     votingEnabled={Boolean(watchSpace.votingEnabled)}
+                    playbackMode={watchSpace.playbackMode || "manual"}
+                    playbackModeSaving={playbackModeSaving}
+                    onPlaybackModeChange={handlePlaybackModeChange}
                     activeVote={activeVote}
                     voteSecondsLeft={voteSecondsLeft}
                     variationPoints={variationPoints}
