@@ -49,6 +49,7 @@ export default function CinematicPlayer({
   onPlay,
   onPause,
   onSeeked,
+  playbackMode = "manual",
 }) {
   const containerRef = useRef(null);
   const hideControlsTimer = useRef(null);
@@ -71,7 +72,7 @@ export default function CinematicPlayer({
 
   const displayTitle = title?.name || title?.title || title || "Now Playing";
 
-  const canControlPlayback = isHost;
+  const canControlPlayback = isHost && playbackMode === "manual";
 
   const clearControlsTimer = () => {
     if (hideControlsTimer.current) {
