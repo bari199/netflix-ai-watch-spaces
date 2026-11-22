@@ -1156,11 +1156,7 @@ const WatchPageDetails = () => {
   // Host Playback Controls
   const emitPlaybackControl = useCallback(
     (action) => {
-      if (
-        !isHost ||
-        applyingRemoteUpdateRef.current ||
-        watchSpace?.playbackMode === "automatic"
-      ) {
+      if (!isHost || applyingRemoteUpdateRef.current) {
         return;
       }
 
@@ -1188,7 +1184,7 @@ const WatchPageDetails = () => {
         }
       });
     },
-    [isHost, watchSpaceId, watchSpace?.playbackMode],
+    [isHost, watchSpaceId],
   );
 
   // Change host playback mode without navigating or refreshing the page.
@@ -1607,7 +1603,6 @@ const WatchPageDetails = () => {
                   }}
                   onPause={() => emitPlaybackControl("pause")}
                   onSeeked={() => emitPlaybackControl("seek")}
-                  playbackMode={watchSpace.playbackMode || "manual"}
                   pendingHeroStart={startPlayerOnMount}
                   variationPoints={variationPoints}
                 />
