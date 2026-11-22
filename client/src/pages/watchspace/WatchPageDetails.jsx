@@ -78,6 +78,7 @@ const WatchPageDetails = () => {
   const [triviaCards, setTriviaCards] = useState([]);
   const [subtitleSelection, setSubtitleSelection] = useState(null);
   const [playerStarted, setPlayerStarted] = useState(false);
+  const [startPlayerOnMount, setStartPlayerOnMount] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState("chat");
 
   const videoRef = useRef(null);
@@ -989,6 +990,36 @@ const WatchPageDetails = () => {
     currentUserId,
   ]);
 
+  // The Hero is rendered before the video element exists. Mount the player
+  // first, then attempt playback as soon as the browser reports it can play.
+  useEffect(() => {
+    if (!startPlayerOnMount || !playerStarted) return undefined;
+
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    let cancelled = false;
+    const startPlayback = () => {
+      if (cancelled) return;
+      setStartPlayerOnMount(false);
+      video.play().catch((playError) => {
+        console.warn("Video autoplay was blocked:", playError?.message);
+        setError("Press Play in the video player to start playback.");
+      });
+    };
+
+    if (video.readyState >= 2) {
+      requestAnimationFrame(startPlayback);
+    } else {
+      video.addEventListener("canplay", startPlayback, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("canplay", startPlayback);
+    };
+  }, [startPlayerOnMount, playerStarted]);
+
   // Keep the vote countdown synchronized with the backend closesAt timestamp.
   useEffect(() => {
     if (!activeVote || activeVote.status !== "open" || !activeVote.closesAt) {
@@ -1440,8 +1471,7 @@ const WatchPageDetails = () => {
   const isPlayerVisible =
     playerStarted ||
     currentPlaybackState === "playing" ||
-    playbackPosition > 0 ||
-    currentPlaybackState === "paused";
+    playbackPosition > 0;
 
   const variationPoints = Array.isArray(title?.timeline)
     ? title.timeline.filter(
@@ -1511,6 +1541,7 @@ const WatchPageDetails = () => {
                   onPlay={
                     isHost
                       ? () => {
+                          setStartPlayerOnMount(true);
                           setPlayerStarted(true);
                         }
                       : undefined
