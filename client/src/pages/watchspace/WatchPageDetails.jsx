@@ -77,6 +77,7 @@ const WatchPageDetails = () => {
   const [voteResult, setVoteResult] = useState(null);
   const [voteMessage, setVoteMessage] = useState("");
   const [voteLoading, setVoteLoading] = useState(false);
+  const [unreadVoteCount, setUnreadVoteCount] = useState(0);
   const [triviaCards, setTriviaCards] = useState([]);
   const [subtitleSelection, setSubtitleSelection] = useState(null);
   const [playerStarted, setPlayerStarted] = useState(false);
@@ -85,6 +86,7 @@ const WatchPageDetails = () => {
   const [activeSidebarTab, setActiveSidebarTab] = useState("chat");
 
   const videoRef = useRef(null);
+  const activeSidebarTabRef = useRef("chat");
   const chatMessagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const aiSubmittingRef = useRef(false);
@@ -125,6 +127,9 @@ const WatchPageDetails = () => {
       const fetchedWatchSpace = response?.watchSpace || null;
       setWatchSpace(fetchedWatchSpace);
       setActiveVote(fetchedWatchSpace?.activeVote || null);
+      setUnreadVoteCount(
+        fetchedWatchSpace?.activeVote?.status === "open" ? 1 : 0,
+      );
     } catch (err) {
       if (requestId === fetchRequestIdRef.current) {
         setError(err?.response?.data?.message || "Failed to load WatchSpace.");
@@ -164,6 +169,7 @@ const WatchPageDetails = () => {
     setVoteSecondsLeft(0);
     setVoteResult(null);
     setVoteMessage("");
+    setUnreadVoteCount(0);
     setTriviaCards([]);
     setSubtitleSelection(null);
     setPlayerStarted(false);
@@ -839,6 +845,9 @@ const WatchPageDetails = () => {
         status: "open",
         closesAt: data.closesAt,
       });
+      if (activeSidebarTabRef.current !== "vote") {
+        setUnreadVoteCount((count) => count + 1);
+      }
       setSelectedVoteOption("");
       setVoteResult(null);
       playWatchSpaceFeedback();
@@ -1638,14 +1647,28 @@ const WatchPageDetails = () => {
                       id={`watchspace-tab-${id}`}
                       aria-selected={isActive}
                       aria-controls={`watchspace-panel-${id}`}
-                      onClick={() => setActiveSidebarTab(id)}
+                      onClick={() => {
+                        activeSidebarTabRef.current = id;
+                        setActiveSidebarTab(id);
+                        if (id === "vote") setUnreadVoteCount(0);
+                      }}
                       className={`flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl px-1.5 py-3 text-[10px] font-semibold transition sm:text-[11px] ${
                         isActive
                           ? "bg-red-600/15 text-red-400 ring-1 ring-inset ring-red-500/25"
                           : "text-white/45 hover:bg-white/[0.06] hover:text-white/85"
                       }`}
                     >
-                      <Icon size={17} />
+                      <span className="relative inline-flex">
+                        <Icon size={17} />
+                        {id === "vote" && unreadVoteCount > 0 && (
+                          <span
+                            aria-label={`${unreadVoteCount} new group vote${unreadVoteCount === 1 ? "" : "s"}`}
+                            className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full border border-[#101010] bg-red-600 px-1 text-[9px] font-extrabold leading-none text-white shadow-lg"
+                          >
+                            {unreadVoteCount > 99 ? "99+" : unreadVoteCount}
+                          </span>
+                        )}
+                      </span>
                       <span className="truncate">{label}</span>
                     </button>
                   );
