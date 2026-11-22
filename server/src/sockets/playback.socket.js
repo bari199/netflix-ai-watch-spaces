@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import Title from "../models/Title.js";
 import WatchSpace from "../models/WatchSpace.js";
 import { recordPlaybackProgress } from "../services/interaction.service.js";
-import { applyDueClosedVariation } from "./variation.socket.js";
 
 // Playback synchronization configuration
 const DRIFT_THRESHOLD_SECONDS = 0.25;
@@ -130,58 +129,7 @@ export const triggerDueTriviaEvents = async (
   }
 };
 
-export const applyDueVariation = async (
-  io,
-  watchSpaceId,
-  previousPosition,
-  currentPosition,
-  playbackState,
-) => {
-  try {
-    if (playbackState !== "playing") return;
 
-    if (previousPosition === null || previousPosition === undefined) {
-      return;
-    }
-
-    if (currentPosition <= previousPosition) return;
-
-    const watchSpace = await WatchSpace.findOneAndUpdate(
-      {
-        _id: watchSpaceId,
-        "activeVote.status": "closed",
-        "activeVote.appliedAt": null,
-        $expr: {
-          $lte: ["$activeVote.applyAtSeconds", currentPosition],
-        },
-      },
-      {
-        $set: {
-          "activeVote.status": "applied",
-          "activeVote.appliedAt": new Date(),
-        },
-      },
-      { new: true },
-    );
-
-    if (!watchSpace) return;
-
-    const vote = watchSpace.activeVote;
-
-    io.to(`watchspace:${watchSpaceId}`).emit("room.variation.applied", {
-      variationId: vote.variationId,
-      winningOptionId: vote.winningOptionId,
-      applyAtSeconds: vote.applyAtSeconds,
-      appliedAt: vote.appliedAt,
-    });
-
-    console.log(
-      `Variation applied: ${vote.variationId} in WatchSpace ${watchSpaceId}`,
-    );
-  } catch (error) {
-    console.error("Variation application error:", error);
-  }
-};
 
 const registerPlaybackHandlers = (io, socket) => {
   const progressTrackers = new Map();
