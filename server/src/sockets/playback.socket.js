@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Title from "../models/Title.js";
 import WatchSpace from "../models/WatchSpace.js";
 import { recordPlaybackProgress } from "../services/interaction.service.js";
+import { applyDueClosedVariation } from "./variation.socket.js";
 
 // Playback synchronization configuration
 const DRIFT_THRESHOLD_SECONDS = 0.25;
@@ -622,6 +623,14 @@ const registerPlaybackHandlers = (io, socket) => {
           previousHostPosition,
           positionSeconds,
           watchSpace.playback.state,
+        );
+
+        // Recover closed votes when the timeline marker is reached on a
+        // fresh server process or after the host reconnects.
+        await applyDueClosedVariation(
+          io,
+          watchSpaceId.toString(),
+          positionSeconds,
         );
 
         hostPlaybackPositions.set(watchSpaceId.toString(), {
