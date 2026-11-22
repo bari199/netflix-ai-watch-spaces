@@ -29,6 +29,9 @@ const RoomDetailsPanel = ({
   actionLoading = false,
   connectionQuality = "checking",
   connectionLatency = null,
+  playbackMode = "manual",
+  playbackModeSaving = false,
+  onPlaybackModeChange,
   copiedInviteCode = false,
   copiedInviteLink = false,
   onCopyInviteCode,
@@ -177,6 +180,45 @@ const RoomDetailsPanel = ({
             );
           })}
         </section>
+
+        {/* Host playback mode */}
+        {isHost && !isEnded && (
+          <section className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-3">
+            <div className="mb-2">
+              <p className="text-[11px] font-semibold text-white/85">
+                Playback mode
+              </p>
+              <p className="mt-1 text-[10px] leading-relaxed text-white/45">
+                Manual lets the host control playback. Automatic follows the title timeline.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-black/35 p-1">
+              {["manual", "automatic"].map((mode) => {
+                const selected = playbackMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    disabled={playbackModeSaving}
+                    aria-pressed={selected}
+                    onClick={() => onPlaybackModeChange?.(mode)}
+                    className={`rounded-md px-2 py-2 text-[11px] font-semibold capitalize transition disabled:cursor-wait disabled:opacity-50 ${
+                      selected
+                        ? "bg-red-600 text-white shadow"
+                        : "text-white/55 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                );
+              })}
+            </div>
+            {playbackModeSaving && (
+              <p className="mt-2 text-[10px] text-white/40">Saving playback mode...</p>
+            )}
+          </section>
+        )}
 
         {/* Connection status */}
         <section className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-3">
