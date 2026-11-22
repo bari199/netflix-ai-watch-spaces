@@ -410,6 +410,8 @@ const registerVariationHandlers = (io, socket) => {
         variationId,
         options,
         closesAt,
+        durationSeconds,
+        mode: "manual",
       });
 
       if (typeof callback === "function") {
