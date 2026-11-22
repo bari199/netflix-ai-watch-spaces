@@ -180,7 +180,7 @@ export const triggerDueAutomaticVariationVote = async (
       event.variationId.trim() &&
       Number.isFinite(startTime) &&
       startTime >= 0 &&
-      previousPosition < startTime &&
+      previousPosition <= startTime &&
       currentPosition >= startTime &&
       !triggeredIds.has(event.eventId) &&
       Array.isArray(event.options) &&
