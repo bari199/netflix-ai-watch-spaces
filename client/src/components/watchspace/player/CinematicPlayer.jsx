@@ -621,12 +621,12 @@ export default function CinematicPlayer({
                       <GitBranch size={19} />
                     </button>
                   )}
-                  <div className="relative">
+                  <div className="relative flex items-center">
                       <button
                         type="button"
                         onClick={() => setShowSettings((value) => !value)}
                         aria-label="Subtitle and playback settings"
-                        className="transition hover:text-red-400"
+                        className="flex h-8 w-8 items-center justify-center transition hover:text-red-400"
                       >
                         <Settings size={19} />
                       </button>
@@ -717,7 +717,7 @@ export default function CinematicPlayer({
                     }}
                     aria-label="Lock video controls"
                     title="Lock controls"
-                    className="transition hover:text-red-400"
+                    className="flex h-8 w-8 items-center justify-center transition hover:text-red-400"
                   >
                     <Lock size={19} />
                   </button>
