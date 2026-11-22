@@ -13,7 +13,6 @@ import {
   Captions,
   LoaderCircle,
   Lock,
-  LockOpen,
   GitBranch,
 } from "lucide-react";
 
@@ -622,19 +621,6 @@ export default function CinematicPlayer({
                       <GitBranch size={19} />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsControlsLocked(true);
-                      setShowSettings(false);
-                      setShowControls(false);
-                    }}
-                    aria-label="Lock video controls"
-                    title="Lock controls"
-                    className="transition hover:text-red-400"
-                  >
-                    <Lock size={19} />
-                  </button>
                   <div className="relative">
                       <button
                         type="button"
@@ -724,7 +710,20 @@ export default function CinematicPlayer({
 
                   <button
                     type="button"
-                    onClick={toggleFullscreen}
+                    onClick={() => {
+                      setIsControlsLocked(true);
+                      setShowSettings(false);
+                      setShowControls(false);
+                    }}
+                    aria-label="Lock video controls"
+                    title="Lock controls"
+                    className="transition hover:text-red-400"
+                  >
+                    <Lock size={19} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen
                     aria-label="Toggle fullscreen"
                     className="transition hover:text-red-400"
                   >
@@ -740,24 +739,21 @@ export default function CinematicPlayer({
           )}
         </AnimatePresence>
 
-        {/* Netflix-style player control lock overlay */}
+        {/* Minimal lock indicator; video remains visually unchanged */}
         {isControlsLocked && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
-            <button
-              type="button"
-              onClick={() => {
-                setIsControlsLocked(false);
-                setShowControls(true);
-                scheduleHideControls();
-              }}
-              aria-label="Unlock video controls"
-              title="Unlock controls"
-              className="flex items-center gap-2 rounded-full border border-white/20 bg-black/75 px-4 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur-xl transition hover:scale-105 hover:bg-black/90"
-            >
-              <LockOpen size={18} />
-              Unlock controls
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsControlsLocked(false);
+              setShowControls(true);
+              scheduleHideControls();
+            }}
+            aria-label="Unlock video controls"
+            title="Unlock controls"
+            className="absolute left-4 top-4 z-40 rounded-full border border-white/20 bg-black/65 p-2.5 text-white shadow-lg transition hover:scale-105 hover:bg-black/85"
+          >
+            <Lock size={19} />
+          </button>
         )}
 
         {/* Viewer permission indicator */}
