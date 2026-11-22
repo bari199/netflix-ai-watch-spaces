@@ -71,6 +71,7 @@ export const applyDueClosedVariation = async (io, watchSpaceId, currentPosition)
 
     const vote = watchSpace.activeVote;
     io.to(getRoomName(watchSpaceId)).emit("room.variation.applied", {
+      watchSpaceId: watchSpaceId.toString(),
       variationId: vote.variationId,
       winningOptionId: vote.winningOptionId,
       applyAtSeconds: vote.applyAtSeconds,
@@ -267,6 +268,7 @@ const registerVariationHandlers = (io, socket) => {
       const roomName = getRoomName(watchSpaceId);
 
       io.to(roomName).emit("room.variation.voteOpen", {
+        watchSpaceId: watchSpaceId.toString(),
         variationId,
         options,
         closesAt,
