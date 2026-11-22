@@ -341,6 +341,13 @@ const registerVariationHandlers = (io, socket) => {
         return sendError(callback, "Only the Host can start a vote.");
       }
 
+      if (watchSpace.playbackMode === "automatic") {
+        return sendError(
+          callback,
+          "Manual vote start is unavailable in automatic mode.",
+        );
+      }
+
       if (!isParticipant(watchSpace, userId)) {
         return sendError(callback, "You are not a WatchSpace participant.");
       }
