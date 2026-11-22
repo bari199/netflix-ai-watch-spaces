@@ -408,7 +408,7 @@ const WatchPageDetails = () => {
 
         console.log("WatchSpace room joined:", response);
 
-        // Restore the latest server playback snapshot when the room reconnects.
+        // Apply a pending restoration after the video metadata is available.
         const playback = response.playback;
         if (playback && Number.isFinite(Number(playback.positionSeconds))) {
           const restoredPosition = Math.max(0, Number(playback.positionSeconds));
@@ -430,7 +430,7 @@ const WatchPageDetails = () => {
 
           const restoreVideo = () => {
             const video = videoRef.current;
-            if (!video || video.readyState < 1) return;
+            if (!video || video.readyState < 1) return false;
 
             applyingRemoteUpdateRef.current = true;
             if (Math.abs(video.currentTime - restoredPosition) > 0.5) {
@@ -448,9 +448,19 @@ const WatchPageDetails = () => {
             requestAnimationFrame(() => {
               applyingRemoteUpdateRef.current = false;
             });
+            return true;
           };
 
-          restoreVideo();
+          if (!restoreVideo()) {
+            const video = videoRef.current;
+            if (video) {
+              const handleMetadata = () => {
+                restoreVideo();
+                video.removeEventListener("loadedmetadata", handleMetadata);
+              };
+              video.addEventListener("loadedmetadata", handleMetadata);
+            }
+          }
         }
 
         socket.emit("presence.join", { watchSpaceId }, (presenceResponse) => {
