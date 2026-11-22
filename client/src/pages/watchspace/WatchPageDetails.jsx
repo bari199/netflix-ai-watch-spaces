@@ -247,6 +247,7 @@ const WatchPageDetails = () => {
 
   const title = watchSpace?.title;
   const titleId = getUserId(title);
+  const displayTitle = title?.name || title?.title || "Untitled Movie";
   const playbackPosition = Number(watchSpace?.playback?.positionSeconds) || 0;
   const activeTimelineEvent = (title?.timeline || [])
     .filter(
@@ -1520,7 +1521,7 @@ const WatchPageDetails = () => {
                   videoUrl={videoUrl}
                   thumbnailUrl={thumbnailUrl}
                   titleId={titleId}
-                  title={title}
+                  title={displayTitle}
                   isHost={isHost}
                   subtitleVariants={subtitleVariants}
                   selectedSubtitle={selectedSubtitle}
@@ -1537,7 +1538,7 @@ const WatchPageDetails = () => {
               ) : (
                 <RoomHero
                   watchSpace={watchSpace}
-                  title={title}
+                  title={{ ...title, name: displayTitle }}
                   hostName={hostName}
                   participantCount={participants.length}
                   isEnded={isEnded}
