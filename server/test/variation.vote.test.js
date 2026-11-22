@@ -7,6 +7,7 @@ import {
   applyDueClosedVariation,
 } from "../src/sockets/playback.socket.js";
 import {
+  closeExpiredAutomaticVote,
   resolveVariationWinner,
   triggerDueAutomaticVariationVote,
 } from "../src/sockets/variation.socket.js";
@@ -110,6 +111,57 @@ test("automatic voting does not reopen a timeline marker already triggered", asy
   );
 
   assert.equal(started, false);
+});
+
+test("an expired automatic poll applies at the current playback position", async (t) => {
+  const watchSpaceId = new mongoose.Types.ObjectId().toString();
+  const vote = {
+    variationId: "ending-choice",
+    mode: "automatic",
+    status: "open",
+    closesAt: new Date(Date.now() - 1000),
+    options,
+    votes: [{ optionId: "south" }],
+    applyAtSeconds: 40,
+  };
+  let update;
+  let emitted;
+
+  t.mock.method(WatchSpace, "findById", async () => ({
+    activeVote: vote,
+    playback: { positionSeconds: 82 },
+  }));
+  t.mock.method(WatchSpace, "findOneAndUpdate", async (filter, changes) => {
+    assert.equal(filter["activeVote.status"], "open");
+    update = changes;
+    return {
+      activeVote: {
+        ...vote,
+        status: "closed",
+        winningOptionId: "south",
+        applyAtSeconds: changes.$set["activeVote.applyAtSeconds"],
+      },
+    };
+  });
+
+  const io = {
+    to(room) {
+      return {
+        emit(eventName, payload) {
+          emitted = { room, eventName, payload };
+        },
+      };
+    },
+  };
+
+  const closed = await closeExpiredAutomaticVote(io, watchSpaceId);
+
+  assert.equal(closed, true);
+  assert.equal(update.$set["activeVote.applyAtSeconds"], 82);
+  assert.equal(emitted.eventName, "room.variation.voteResult");
+  assert.equal(emitted.payload.winningOptionId, "south");
+  assert.equal(emitted.payload.applyAtSeconds, 82);
+  assert.equal(emitted.payload.mode, "automatic");
 });
 
 test("variation vote ties resolve by authored option order", () => {
