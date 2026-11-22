@@ -370,6 +370,9 @@ const registerPlaybackHandlers = (io, socket) => {
 
       const watchSpace = await WatchSpace.findById(watchSpaceId);
       if (!watchSpace) throw new Error("WatchSpace not found");
+      if (watchSpace.status === "ended") {
+        throw new Error("This WatchSpace has already ended");
+      }
       if (watchSpace.host.toString() !== getUserId()) {
         throw new Error("Only the host can change playback mode");
       }
@@ -377,15 +380,16 @@ const registerPlaybackHandlers = (io, socket) => {
       watchSpace.playbackMode = mode;
       await watchSpace.save();
 
+      if (typeof callback === "function") {
+        callback({ success: true, playbackMode: mode });
+      }
+
       io.to(roomName).emit("room.playback.mode.changed", {
         watchSpaceId: watchSpaceId.toString(),
         mode,
         updatedBy: getUserId(),
       });
 
-      if (typeof callback === "function") {
-        callback({ success: true, playbackMode: mode });
-      }
     } catch (error) {
       if (typeof callback === "function") {
         callback({ success: false, message: error.message });
