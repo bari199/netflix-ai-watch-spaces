@@ -47,40 +47,7 @@ export const resolveVariationWinner = (options, votes) => {
   return { voteCounts, winningOptionId };
 };
 
-export const applyDueClosedVariation = async (io, watchSpaceId, currentPosition) => {
-  if (!Number.isFinite(currentPosition) || currentPosition < 0) return;
 
-  try {
-    const watchSpace = await WatchSpace.findOneAndUpdate(
-      {
-        _id: watchSpaceId,
-        "activeVote.status": "closed",
-        "activeVote.appliedAt": null,
-        $expr: { $lte: ["$activeVote.applyAtSeconds", currentPosition] },
-      },
-      {
-        $set: {
-          "activeVote.status": "applied",
-          "activeVote.appliedAt": new Date(),
-        },
-      },
-      { new: true },
-    );
-
-    if (!watchSpace?.activeVote) return;
-
-    const vote = watchSpace.activeVote;
-    io.to(getRoomName(watchSpaceId)).emit("room.variation.applied", {
-      watchSpaceId: watchSpaceId.toString(),
-      variationId: vote.variationId,
-      winningOptionId: vote.winningOptionId,
-      applyAtSeconds: vote.applyAtSeconds,
-      appliedAt: vote.appliedAt,
-    });
-  } catch (error) {
-    console.error("Due variation recovery error:", error);
-  }
-};
 
 const closeVote = async (io, watchSpaceId) => {
   try {
