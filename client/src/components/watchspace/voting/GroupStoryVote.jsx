@@ -142,8 +142,21 @@ export default function GroupStoryVote({
           )}
         </section>
 
+        {playbackMode === "automatic" &&
+          !isVoteOpen &&
+          !isVoteClosed &&
+          !isVoteApplied && (
+            <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-[11px] leading-relaxed text-white/55">
+              Waiting for playback to reach the next story voting marker.
+            </p>
+          )}
+
         {/* Host: Start a vote manually */}
-        {playbackMode === "manual" && isHost && !isVoteOpen && variationPoints.length > 0 && (
+        {playbackMode === "manual" &&
+          isHost &&
+          !isVoteOpen &&
+          !isVoteClosed &&
+          variationPoints.length > 0 && (
           <div className="rounded-lg border border-white/10 bg-[#191919] p-3">
             <div className="mb-3 flex items-center gap-2">
               <Vote size={15} className="text-red-400" />
