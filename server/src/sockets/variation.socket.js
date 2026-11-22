@@ -129,6 +129,36 @@ const closeVote = async (io, watchSpaceId) => {
 };
 
 const registerVariationHandlers = (io, socket) => {
+
+  socket.on("variation.vote.state.get", async (data = {}, callback) => {
+    try {
+      const { watchSpaceId } = data;
+      if (!mongoose.Types.ObjectId.isValid(watchSpaceId)) {
+        return sendError(callback, "Invalid WatchSpace ID.");
+      }
+      if (!isRoomMember(socket, watchSpaceId)) {
+        return sendError(callback, "Join the WatchSpace first.");
+      }
+
+      const watchSpace = await WatchSpace.findById(watchSpaceId).select(
+        "activeVote playback",
+      );
+      if (!watchSpace) {
+        return sendError(callback, "WatchSpace not found.");
+      }
+
+      if (typeof callback === "function") {
+        callback({
+          success: true,
+          activeVote: watchSpace.activeVote || null,
+          playback: watchSpace.playback || null,
+        });
+      }
+    } catch (error) {
+      sendError(callback, error.message || "Could not retrieve vote state.");
+    }
+  });
+
   const userId = socket.data.userId;
 
   // HOST: Start a timed narrative variation vote
