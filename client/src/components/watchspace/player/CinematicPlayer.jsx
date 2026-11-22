@@ -13,6 +13,7 @@ import {
   Captions,
   LoaderCircle,
   Lock,
+  LockOpen,
   GitBranch,
 } from "lucide-react";
 
@@ -67,6 +68,7 @@ export default function CinematicPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
   const [showVotingMarkers, setShowVotingMarkers] = useState(true);
+  const [isControlsLocked, setIsControlsLocked] = useState(false);
 
   const selectedVariantId =
     typeof selectedSubtitle === "string"
@@ -97,11 +99,13 @@ export default function CinematicPlayer({
   }, [isPlaying]);
 
   const revealControls = () => {
+    if (isControlsLocked) return;
     setShowControls(true);
     scheduleHideControls();
   };
 
   const togglePlay = () => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback) return;
@@ -116,6 +120,7 @@ export default function CinematicPlayer({
   };
 
   const seekBy = (seconds) => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback || !Number.isFinite(video.duration)) {
@@ -129,6 +134,7 @@ export default function CinematicPlayer({
   };
 
   const handleSeek = (event) => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback) return;
@@ -174,6 +180,7 @@ export default function CinematicPlayer({
   }, [videoRef, videoUrl]);
 
   const handleVolumeChange = (event) => {
+    if (isControlsLocked) return;
     const nextVolume = Number(event.target.value);
     const video = videoRef?.current;
 
@@ -187,6 +194,7 @@ export default function CinematicPlayer({
   };
 
   const toggleMute = () => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video) return;
@@ -203,6 +211,7 @@ export default function CinematicPlayer({
   };
 
   const toggleFullscreen = async () => {
+    if (isControlsLocked) return;
     const container = containerRef.current;
 
     if (!container) return;
@@ -219,6 +228,7 @@ export default function CinematicPlayer({
   };
 
   const changePlaybackRate = (rate) => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback) return;
@@ -229,6 +239,7 @@ export default function CinematicPlayer({
   };
 
   const handleSubtitleChange = (variantId) => {
+    if (isControlsLocked) return;
     onSubtitleChange?.(variantId);
     setShowSettings(false);
   };
@@ -366,6 +377,7 @@ export default function CinematicPlayer({
           onLoadedMetadata={handleLoadedMetadata}
           onSeeked={onSeeked}
           onClick={() => {
+            if (isControlsLocked) return;
             if (canStartFromHero && videoRef.current?.paused) {
               videoRef.current.play().catch((error) => {
                 console.error("Video playback failed:", error);
@@ -397,7 +409,7 @@ export default function CinematicPlayer({
 
         {/* Top bar */}
         <AnimatePresence>
-          {showControls && (
+          {showControls && !isControlsLocked && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -444,7 +456,7 @@ export default function CinematicPlayer({
 
         {/* Center controls */}
         <AnimatePresence>
-          {showControls && !isBuffering && (
+          {showControls && !isControlsLocked && !isBuffering && (
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -610,6 +622,19 @@ export default function CinematicPlayer({
                       <GitBranch size={19} />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsControlsLocked(true);
+                      setShowSettings(false);
+                      setShowControls(false);
+                    }}
+                    aria-label="Lock video controls"
+                    title="Lock controls"
+                    className="transition hover:text-red-400"
+                  >
+                    <Lock size={19} />
+                  </button>
                   <div className="relative">
                       <button
                         type="button"
@@ -714,6 +739,26 @@ export default function CinematicPlayer({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Netflix-style player control lock overlay */}
+        {isControlsLocked && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
+            <button
+              type="button"
+              onClick={() => {
+                setIsControlsLocked(false);
+                setShowControls(true);
+                scheduleHideControls();
+              }}
+              aria-label="Unlock video controls"
+              title="Unlock controls"
+              className="flex items-center gap-2 rounded-full border border-white/20 bg-black/75 px-4 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur-xl transition hover:scale-105 hover:bg-black/90"
+            >
+              <LockOpen size={18} />
+              Unlock controls
+            </button>
+          </div>
+        )}
 
         {/* Viewer permission indicator */}
         {!isHost && showControls && (
