@@ -67,6 +67,16 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
+    notificationPreferences: {
+      soundEnabled: {
+        type: Boolean,
+        default: true,
+      },
+      vibrationEnabled: {
+        type: Boolean,
+        default: true,
+      },
+    },
     // Password reset OTP
     passwordResetOtpHash: {
       type: String,

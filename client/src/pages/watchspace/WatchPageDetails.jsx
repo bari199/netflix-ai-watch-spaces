@@ -14,6 +14,7 @@ import {
   setParticipantMute,
   removeParticipant,
   transferWatchSpaceHost,
+  updateWatchSpaceVotingSettings,
 } from "../../services/watchSpace.service.js";
 
 import {
@@ -87,6 +88,62 @@ const WatchPageDetails = () => {
   const [startPlayerOnMount, setStartPlayerOnMount] = useState(false);
   const [playbackModeSaving, setPlaybackModeSaving] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState("chat");
+
+  const [votingMode, setVotingMode] = useState("manual");
+  const [voteCount, setVoteCount] = useState(0);
+  const [votingSettingsLoading, setVotingSettingsLoading] = useState(false);
+
+  const soundEnabled = user?.notificationPreferences?.soundEnabled ?? true;
+  const vibrationEnabled =
+    user?.notificationPreferences?.vibrationEnabled ?? true;
+
+  const audioContextRef = useRef(null);
+
+  const playVoteNotification = useCallback(() => {
+    if (!soundEnabled) return;
+
+    try {
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextClass) return;
+
+      let context = audioContextRef.current;
+
+      if (!context) {
+        context = new AudioContextClass();
+        audioContextRef.current = context;
+      }
+
+      if (context.state === "suspended") return;
+
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.12, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.2);
+
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.2);
+    } catch (error) {
+      console.warn("Vote sound unavailable:", error);
+    }
+  }, [soundEnabled]);
+
+  const triggerVoteVibration = useCallback(() => {
+    if (!vibrationEnabled) return;
+
+    if (
+      typeof navigator !== "undefined" &&
+      typeof navigator.vibrate === "function"
+    ) {
+      navigator.vibrate(150);
+    }
+  }, [vibrationEnabled]);
 
   const videoRef = useRef(null);
   const activeSidebarTabRef = useRef("chat");
@@ -872,6 +929,8 @@ const WatchPageDetails = () => {
         status: "open",
         durationSeconds: data.durationSeconds || 30,
         closesAt: data.closesAt,
+        automatic: Boolean(data.automatic),
+        voteCounts: {},
       });
       if (activeSidebarTabRef.current !== "vote") {
         setUnreadVoteCount((count) => count + 1);
@@ -972,6 +1031,7 @@ const WatchPageDetails = () => {
     socket.on("room.variation.voteOpen", handleVoteOpen);
     socket.on("room.variation.voteResult", handleVoteResult);
     socket.on("room.variation.applied", handleVariationApplied);
+    socket.on("room.variation.voteUpdate", handleVoteUpdate);
 
     if (socket.connected) {
       joinRoom();
@@ -1035,6 +1095,7 @@ const WatchPageDetails = () => {
       socket.off("room.ai.trivia", handleTriviaEvent);
       socket.off("room.variation.voteOpen", handleVoteOpen);
       socket.off("room.variation.voteResult", handleVoteResult);
+      socket.off("room.variation.voteUpdate", handleVoteUpdate);
       socket.off("room.variation.applied", handleVariationApplied);
 
       if (roomJoined && socket.connected) {
@@ -1054,6 +1115,8 @@ const WatchPageDetails = () => {
     isEnded,
     watchSpaceId,
     currentUserId,
+    playVoteNotification,
+    triggerVoteVibration,
   ]);
 
   // The Hero is rendered before the video element exists. Wait until the
@@ -1108,6 +1171,48 @@ const WatchPageDetails = () => {
 
     return () => clearInterval(timer);
   }, [activeVote?.status, activeVote?.closesAt]);
+
+  const handleVotingModeChange = async (nextMode) => {
+    if (!isHost || votingSettingsLoading || isEnded) return;
+    if (!["manual", "automatic"].includes(nextMode)) return;
+
+    const currentMode = votingMode;
+    const durationSeconds = 60;
+
+    if (nextMode === currentMode) return;
+
+    try {
+      setVotingSettingsLoading(true);
+      setError("");
+
+      const response = await updateWatchSpaceVotingSettings(
+        watchSpaceId,
+        nextMode,
+        durationSeconds,
+      );
+
+      const updatedWatchSpace = response?.watchSpace;
+      setVotingMode(updatedWatchSpace?.votingMode || nextMode);
+
+      if (updatedWatchSpace) {
+        setWatchSpace((previous) => ({
+          ...previous,
+          ...updatedWatchSpace,
+        }));
+      }
+
+      setVoteMessage(
+        nextMode === "automatic"
+          ? "Automatic voting enabled. Votes will start at timeline variation points."
+          : "Manual voting enabled.",
+      );
+    } catch (err) {
+      setVotingMode(currentMode);
+      setError(err?.response?.data?.message || "Failed to update voting mode.");
+    } finally {
+      setVotingSettingsLoading(false);
+    }
+  };
 
   // Host starts a vote using a pre-authored variation point from the Title timeline.
   const handleStartVote = () => {

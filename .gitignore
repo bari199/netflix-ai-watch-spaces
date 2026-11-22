@@ -27,3 +27,15 @@ Thumbs.db
 # Local uploads and runtime data
 uploads/
 storage-data/
+local-seed-assets
+
+
+
+# Video assets
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+
+uploads/

@@ -151,7 +151,9 @@ export default function CinematicPlayer({
 
     const syncMediaState = () => {
       setIsPlaying(!video.paused && !video.ended);
-      setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
+      setCurrentTime(
+        Number.isFinite(video.currentTime) ? video.currentTime : 0,
+      );
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
       setVolume(video.volume);
       setIsMuted(video.muted);
@@ -537,19 +539,26 @@ export default function CinematicPlayer({
                   className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
 
-                {showVotingMarkers && duration > 0 && variationPoints.map((point) => {
-                  const markerTime = Number(point.startTime);
-                  if (!Number.isFinite(markerTime) || markerTime < 0 || markerTime > duration) return null;
-                  return (
-                    <span
-                      key={point.eventId || point.variationId}
-                      title={`${point.description || point.text || "Voting point"} · ${formatTime(markerTime)}`}
-                      aria-label={`Voting point at ${formatTime(markerTime)}`}
-                      className="pointer-events-none absolute z-20 h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
-                      style={{ left: `${(markerTime / duration) * 100}%` }}
-                    />
-                  );
-                })}
+                {showVotingMarkers &&
+                  duration > 0 &&
+                  variationPoints.map((point) => {
+                    const markerTime = Number(point.startTime);
+                    if (
+                      !Number.isFinite(markerTime) ||
+                      markerTime < 0 ||
+                      markerTime > duration
+                    )
+                      return null;
+                    return (
+                      <span
+                        key={point.eventId || point.variationId}
+                        title={`${point.description || point.text || "Voting point"} · ${formatTime(markerTime)}`}
+                        aria-label={`Voting point at ${formatTime(markerTime)}`}
+                        className="pointer-events-none absolute z-20 h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
+                        style={{ left: `${(markerTime / duration) * 100}%` }}
+                      />
+                    );
+                  })}
 
                 <div
                   className="pointer-events-none absolute h-3 w-3 rounded-full bg-red-600 opacity-0 transition-opacity group-hover/progress:opacity-100"
@@ -612,100 +621,110 @@ export default function CinematicPlayer({
                   {variationPoints.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setShowVotingMarkers((visible) => !visible)}
-                      aria-label={showVotingMarkers ? "Hide voting timeline markers" : "Show voting timeline markers"}
+                      onClick={() =>
+                        setShowVotingMarkers((visible) => !visible)
+                      }
+                      aria-label={
+                        showVotingMarkers
+                          ? "Hide voting timeline markers"
+                          : "Show voting timeline markers"
+                      }
                       aria-pressed={showVotingMarkers}
-                      title={showVotingMarkers ? "Hide voting markers" : "Show voting markers"}
+                      title={
+                        showVotingMarkers
+                          ? "Hide voting markers"
+                          : "Show voting markers"
+                      }
                       className={`transition hover:text-red-400 ${showVotingMarkers ? "text-red-400" : "text-white/55"}`}
                     >
                       <GitBranch size={19} />
                     </button>
                   )}
                   <div className="relative flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => setShowSettings((value) => !value)}
-                        aria-label="Subtitle and playback settings"
-                        className="flex h-8 w-8 items-center justify-center transition hover:text-red-400"
-                      >
-                        <Settings size={19} />
-                      </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings((value) => !value)}
+                      aria-label="Subtitle and playback settings"
+                      className="flex h-8 w-8 items-center justify-center transition hover:text-red-400"
+                    >
+                      <Settings size={19} />
+                    </button>
 
-                      <AnimatePresence>
-                        {showSettings && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 8 }}
-                            className="absolute bottom-9 right-0 z-50 max-h-72 w-52 overflow-y-auto rounded-xl border border-white/10 bg-[#171717] p-3 shadow-2xl"
-                          >
-                            <p className="mb-3 text-xs font-bold text-white">
-                              Playback settings
-                            </p>
+                    <AnimatePresence>
+                      {showSettings && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 8 }}
+                          className="absolute bottom-9 right-0 z-50 max-h-72 w-52 overflow-y-auto rounded-xl border border-white/10 bg-[#171717] p-3 shadow-2xl"
+                        >
+                          <p className="mb-3 text-xs font-bold text-white">
+                            Playback settings
+                          </p>
 
-                            {isHost && (
-                              <>
-                                <p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-white/40">
-                                  Playback speed
-                                </p>
-
-                                <div className="mb-3 grid grid-cols-3 gap-1">
-                                  {PLAYBACK_RATES.map((rate) => (
-                                    <button
-                                      key={rate}
-                                      type="button"
-                                      onClick={() => changePlaybackRate(rate)}
-                                      className={`rounded-md px-2 py-1.5 text-[10px] transition ${
-                                        playbackRate === rate
-                                          ? "bg-red-600 text-white"
-                                          : "bg-white/5 text-white/70 hover:bg-white/10"
-                                      }`}
-                                    >
-                                      {rate}x
-                                    </button>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-
-                            <div className="mb-2 flex items-center gap-2">
-                              <Captions size={14} className="text-red-400" />
-                              <p className="text-[10px] font-bold text-white">
-                                Subtitles
+                          {isHost && (
+                            <>
+                              <p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-white/40">
+                                Playback speed
                               </p>
-                            </div>
 
+                              <div className="mb-3 grid grid-cols-3 gap-1">
+                                {PLAYBACK_RATES.map((rate) => (
+                                  <button
+                                    key={rate}
+                                    type="button"
+                                    onClick={() => changePlaybackRate(rate)}
+                                    className={`rounded-md px-2 py-1.5 text-[10px] transition ${
+                                      playbackRate === rate
+                                        ? "bg-red-600 text-white"
+                                        : "bg-white/5 text-white/70 hover:bg-white/10"
+                                    }`}
+                                  >
+                                    {rate}x
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+
+                          <div className="mb-2 flex items-center gap-2">
+                            <Captions size={14} className="text-red-400" />
+                            <p className="text-[10px] font-bold text-white">
+                              Subtitles
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSubtitleChange("")}
+                            className={`w-full rounded-md px-2 py-2 text-left text-[10px] transition hover:bg-white/10 ${
+                              !selectedVariantId
+                                ? "text-red-400"
+                                : "text-white/70"
+                            }`}
+                          >
+                            Off
+                          </button>
+
+                          {subtitleVariants.map((variant) => (
                             <button
+                              key={variant.variantId}
                               type="button"
-                              onClick={() => handleSubtitleChange("")}
+                              onClick={() =>
+                                handleSubtitleChange(variant.variantId)
+                              }
                               className={`w-full rounded-md px-2 py-2 text-left text-[10px] transition hover:bg-white/10 ${
-                                !selectedVariantId
+                                selectedVariantId === variant.variantId
                                   ? "text-red-400"
                                   : "text-white/70"
                               }`}
                             >
-                              Off
+                              {variant.label} ({variant.locale})
                             </button>
-
-                            {subtitleVariants.map((variant) => (
-                              <button
-                                key={variant.variantId}
-                                type="button"
-                                onClick={() =>
-                                  handleSubtitleChange(variant.variantId)
-                                }
-                                className={`w-full rounded-md px-2 py-2 text-left text-[10px] transition hover:bg-white/10 ${
-                                  selectedVariantId === variant.variantId
-                                    ? "text-red-400"
-                                    : "text-white/70"
-                                }`}
-                              >
-                                {variant.label} ({variant.locale})
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   <button

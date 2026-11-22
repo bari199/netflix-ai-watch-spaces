@@ -7,7 +7,6 @@ export const getActiveWatchSpaces = async () => {
 };
 
 // Get WatchSpace details
-// Get WatchSpace details
 export const getWatchSpaceById = async (watchSpaceId) => {
   const response = await api.get(`/watch-spaces/${watchSpaceId}`);
   return response.data;
@@ -48,6 +47,23 @@ export const leaveWatchSpace = async (watchSpaceId) => {
 // End a WatchSpace
 export const endWatchSpace = async (watchSpaceId) => {
   const response = await api.post(`/watch-spaces/${watchSpaceId}/end`);
+  return response.data;
+};
+
+// Update WatchSpace voting settings (Host only)
+export const updateWatchSpaceVotingSettings = async (
+  watchSpaceId,
+  votingMode,
+  automaticVoteDurationSeconds = 60,
+) => {
+  const response = await api.patch(
+    `/watch-spaces/${watchSpaceId}/voting-settings`,
+    {
+      votingMode,
+      automaticVoteDurationSeconds,
+    },
+  );
+
   return response.data;
 };
 
@@ -119,7 +135,6 @@ export const getMyHostedWatchSpaces = async () => {
   const response = await api.get("/watch-spaces/my-hosted?limit=50");
   return response.data;
 };
-
 
 // Delete a WatchSpace hosted by the logged-in user
 export const deleteWatchSpace = async (watchSpaceId) => {

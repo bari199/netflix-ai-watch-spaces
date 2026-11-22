@@ -517,15 +517,32 @@ const registerVariationHandlers = (io, socket) => {
         });
       }
 
-      await watchSpace.save();
+            await watchSpace.save();
 
-      if (typeof callback === "function") {
-        callback({
-          success: true,
-          message: "Vote recorded successfully.",
-          optionId,
-        });
-      }
+            const { voteCounts } = resolveVariationWinner(
+              vote.options,
+              vote.votes,
+            );
+
+            const voteCount = vote.votes.length;
+
+            // Broadcast live vote updates to all WatchSpace participants
+            io.to(getRoomName(watchSpaceId)).emit("room.variation.voteUpdate", {
+              variationId: vote.variationId,
+              voteCount,
+              voteCounts,
+              isNewVote: !existingVote,
+              updatedOptionId: optionId,
+            });
+
+            if (typeof callback === "function") {
+              callback({
+                success: true,
+                message: "Vote recorded successfully.",
+                optionId,
+                voteCount,
+              });
+            }
     } catch (error) {
       console.error("Variation vote cast error:", error);
       sendError(callback, "Failed to record vote.");
