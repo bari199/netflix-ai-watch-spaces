@@ -1180,7 +1180,12 @@ const WatchPageDetails = () => {
       const response = await setPlaybackMode(watchSpaceId, mode);
       setWatchSpace((previous) =>
         previous
-          ? { ...previous, ...response.watchSpace, title: previous.title }
+          ? {
+              ...previous,
+              ...response.watchSpace,
+              title: previous.title,
+              playbackMode: response.watchSpace?.playbackMode || mode,
+            }
           : previous,
       );
     } catch (modeError) {
