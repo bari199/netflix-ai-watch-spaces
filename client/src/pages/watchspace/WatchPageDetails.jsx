@@ -1595,6 +1595,7 @@ const WatchPageDetails = () => {
                   onPause={() => emitPlaybackControl("pause")}
                   onSeeked={() => emitPlaybackControl("seek")}
                   playbackMode={watchSpace.playbackMode || "manual"}
+                  pendingHeroStart={startPlayerOnMount}
                 />
               ) : (
                 <RoomHero
