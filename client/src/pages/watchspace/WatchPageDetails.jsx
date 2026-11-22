@@ -463,6 +463,31 @@ const WatchPageDetails = () => {
           }
         }
 
+        socket.emit(
+          "variation.vote.state.get",
+          { watchSpaceId },
+          (voteStateResponse) => {
+            if (!active || !voteStateResponse?.success) return;
+            const persistedVote = voteStateResponse.activeVote || null;
+            setActiveVote(persistedVote);
+            if (persistedVote?.status === "closed") {
+              setVoteResult({
+                variationId: persistedVote.variationId,
+                voteCounts: Object.fromEntries(
+                  (persistedVote.options || []).map((option) => [
+                    option.id,
+                    (persistedVote.votes || []).filter(
+                      (vote) => vote.optionId === option.id,
+                    ).length,
+                  ]),
+                ),
+                winningOptionId: persistedVote.winningOptionId,
+                applyAtSeconds: persistedVote.applyAtSeconds,
+              });
+            }
+          },
+        );
+
         socket.emit("presence.join", { watchSpaceId }, (presenceResponse) => {
           if (!active) return;
 
@@ -777,7 +802,11 @@ const WatchPageDetails = () => {
 
     // Narrative Variation Voting Events
     const handleVoteOpen = (data) => {
-      if (!active || !data?.variationId) return;
+      if (
+        !active ||
+        String(data?.watchSpaceId || watchSpaceId) !== String(watchSpaceId) ||
+        !data?.variationId
+      ) return;
 
       setActiveVote({
         variationId: data.variationId,
