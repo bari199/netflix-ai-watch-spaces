@@ -3,6 +3,24 @@ const VIBRATION_KEY = "watchspace.vibrationEnabled";
 
 let audioContext;
 
+const getAudioContext = () => {
+  if (typeof window === "undefined") return null;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+
+  audioContext ||= new AudioContextClass();
+  return audioContext;
+};
+
+// Call this from a real user gesture so later Socket.IO notifications can
+// play audio even though they arrive outside the browser's user-activation window.
+export const unlockWatchSpaceAudio = () => {
+  const context = getAudioContext();
+  if (context?.state === "suspended") {
+    context.resume().catch(() => {});
+  }
+};
+
 export const playWatchSpaceFeedback = ({ sound = true, vibration = true } = {}) => {
   if (typeof window === "undefined") return;
 
@@ -17,19 +35,17 @@ export const playWatchSpaceFeedback = ({ sound = true, vibration = true } = {}) 
 
   if (!sound || localStorage.getItem(SOUND_KEY) === "false") return;
 
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
-
   try {
-    audioContext ||= new AudioContextClass();
+    const context = getAudioContext();
+    if (!context) return;
 
-    if (audioContext.state === "suspended") {
-      audioContext.resume().catch(() => {});
+    if (context.state === "suspended") {
+      context.resume().catch(() => {});
     }
 
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    const now = audioContext.currentTime;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const now = context.currentTime;
 
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(660, now);
