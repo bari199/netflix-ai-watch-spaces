@@ -248,6 +248,30 @@ export const removeParticipant = async (
   return watchSpace;
 };
 
+export const setPlaybackMode = async (watchSpaceId, hostId, mode) => {
+  if (!["manual", "automatic"].includes(mode)) {
+    throw new Error("Playback mode must be manual or automatic");
+  }
+
+  const watchSpace = await WatchSpace.findById(watchSpaceId);
+  if (!watchSpace) {
+    throw new Error("WatchSpace not found");
+  }
+
+  if (watchSpace.host.toString() !== hostId.toString()) {
+    throw new Error("Only the host can change playback mode");
+  }
+
+  if (watchSpace.status === "ended") {
+    throw new Error("This WatchSpace has already ended");
+  }
+
+  watchSpace.playbackMode = mode;
+  await watchSpace.save();
+
+  return watchSpace;
+};
+
 export const setWatchSpaceLock = async (watchSpaceId, hostId, isLocked) => {
   const watchSpace = await WatchSpace.findById(watchSpaceId);
 
