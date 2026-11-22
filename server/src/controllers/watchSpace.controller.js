@@ -8,6 +8,7 @@ import {
   setParticipantMute,
   removeParticipant,
   setWatchSpaceLock,
+  setPlaybackMode,
   deleteWatchSpace,
   transferWatchSpaceHost,
   getUpcomingScheduledWatchSpaces as getUpcomingScheduledWatchSpacesService,
@@ -289,6 +290,26 @@ export const removeParticipantController = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Participant removed successfully",
+      watchSpace,
+    });
+  } catch (error) {
+    return handleWatchSpaceError(res, error);
+  }
+};
+
+// Host: switch between manual and timeline-driven playback.
+export const setPlaybackModeController = async (req, res) => {
+  try {
+    const { mode } = req.body;
+    const watchSpace = await setPlaybackMode(
+      req.params.watchSpaceId,
+      req.user._id,
+      mode,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Playback mode changed to ${mode}`,
       watchSpace,
     });
   } catch (error) {

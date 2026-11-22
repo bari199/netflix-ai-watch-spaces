@@ -19,6 +19,8 @@ import {
   LoaderCircle,
   ArrowLeft,
   KeyRound,
+  Volume2,
+  Vibrate,
   Eye,
   EyeOff,
   PanelLeftClose,
@@ -379,6 +381,19 @@ function MyProfilePage() {
 
   const [activeTab, setActiveTab] = useState("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Local playback feedback preferences.
+  const [soundEnabled, setSoundEnabled] = useState(
+    () => localStorage.getItem("watchspace.soundEnabled") !== "false",
+  );
+  const [vibrationEnabled, setVibrationEnabled] = useState(
+    () => localStorage.getItem("watchspace.vibrationEnabled") !== "false",
+  );
+
+  useEffect(() => {
+    localStorage.setItem("watchspace.soundEnabled", String(soundEnabled));
+    localStorage.setItem("watchspace.vibrationEnabled", String(vibrationEnabled));
+  }, [soundEnabled, vibrationEnabled]);
 
   // Profile states
   const [name, setName] = useState(user?.name || "");
@@ -825,7 +840,49 @@ function MyProfilePage() {
   // ==========================================
 
   const renderSettings = () => (
-    <div className="max-w-md space-y-5">
+    <div className="max-w-md space-y-6">
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Playback preferences</h3>
+          <p className="mt-0.5 text-xs leading-5 text-zinc-400">
+            Control optional sound and vibration feedback in Watch Spaces.
+          </p>
+        </div>
+
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <span className="flex items-center gap-3">
+            <Volume2 size={18} className="text-zinc-400" />
+            <span>
+              <span className="block text-sm font-medium">Sound effects</span>
+              <span className="block text-xs text-zinc-500">Enable interface sound feedback</span>
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={soundEnabled}
+            onChange={(event) => setSoundEnabled(event.target.checked)}
+            className="size-4 accent-[#e50914]"
+          />
+        </label>
+
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <span className="flex items-center gap-3">
+            <Vibrate size={18} className="text-zinc-400" />
+            <span>
+              <span className="block text-sm font-medium">Vibration feedback</span>
+              <span className="block text-xs text-zinc-500">Enable vibration where supported</span>
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={vibrationEnabled}
+            onChange={(event) => setVibrationEnabled(event.target.checked)}
+            className="size-4 accent-[#e50914]"
+          />
+        </label>
+      </section>
+
+      <div className="border-t border-white/10 pt-5">
       <div className="flex items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#e50914]/10 text-[#e50914]">
           <KeyRound size={17} />
@@ -928,6 +985,7 @@ function MyProfilePage() {
 
       {otpError && <StatusMessage type="error">{otpError}</StatusMessage>}
       {otpMessage && <StatusMessage>{otpMessage}</StatusMessage>}
+      </div>
     </div>
   );
 

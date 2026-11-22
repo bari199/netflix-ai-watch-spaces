@@ -13,6 +13,7 @@ import {
   Captions,
   LoaderCircle,
   Lock,
+  GitBranch,
 } from "lucide-react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
@@ -49,6 +50,8 @@ export default function CinematicPlayer({
   onPlay,
   onPause,
   onSeeked,
+  pendingHeroStart = false,
+  variationPoints = [],
 }) {
   const containerRef = useRef(null);
   const hideControlsTimer = useRef(null);
@@ -63,6 +66,8 @@ export default function CinematicPlayer({
   const [showSettings, setShowSettings] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [showVotingMarkers, setShowVotingMarkers] = useState(true);
+  const [isControlsLocked, setIsControlsLocked] = useState(false);
 
   const selectedVariantId =
     typeof selectedSubtitle === "string"
@@ -72,6 +77,7 @@ export default function CinematicPlayer({
   const displayTitle = title?.name || title?.title || title || "Now Playing";
 
   const canControlPlayback = isHost;
+  const canStartFromHero = isHost && pendingHeroStart;
 
   const clearControlsTimer = () => {
     if (hideControlsTimer.current) {
@@ -92,11 +98,13 @@ export default function CinematicPlayer({
   }, [isPlaying]);
 
   const revealControls = () => {
+    if (isControlsLocked) return;
     setShowControls(true);
     scheduleHideControls();
   };
 
   const togglePlay = () => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback) return;
@@ -111,6 +119,7 @@ export default function CinematicPlayer({
   };
 
   const seekBy = (seconds) => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback || !Number.isFinite(video.duration)) {
@@ -124,6 +133,7 @@ export default function CinematicPlayer({
   };
 
   const handleSeek = (event) => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback) return;
@@ -134,7 +144,42 @@ export default function CinematicPlayer({
     setCurrentTime(nextTime);
   };
 
+  useEffect(() => {
+    const video = videoRef?.current;
+
+    if (!video) return;
+
+    const syncMediaState = () => {
+      setIsPlaying(!video.paused && !video.ended);
+      setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
+      setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+      setVolume(video.volume);
+      setIsMuted(video.muted);
+      setPlaybackRate(video.playbackRate || 1);
+    };
+
+    syncMediaState();
+    video.addEventListener("loadedmetadata", syncMediaState);
+    video.addEventListener("durationchange", syncMediaState);
+    video.addEventListener("timeupdate", syncMediaState);
+    video.addEventListener("volumechange", syncMediaState);
+    video.addEventListener("ratechange", syncMediaState);
+    video.addEventListener("play", syncMediaState);
+    video.addEventListener("pause", syncMediaState);
+
+    return () => {
+      video.removeEventListener("loadedmetadata", syncMediaState);
+      video.removeEventListener("durationchange", syncMediaState);
+      video.removeEventListener("timeupdate", syncMediaState);
+      video.removeEventListener("volumechange", syncMediaState);
+      video.removeEventListener("ratechange", syncMediaState);
+      video.removeEventListener("play", syncMediaState);
+      video.removeEventListener("pause", syncMediaState);
+    };
+  }, [videoRef, videoUrl]);
+
   const handleVolumeChange = (event) => {
+    if (isControlsLocked) return;
     const nextVolume = Number(event.target.value);
     const video = videoRef?.current;
 
@@ -148,6 +193,7 @@ export default function CinematicPlayer({
   };
 
   const toggleMute = () => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video) return;
@@ -164,6 +210,7 @@ export default function CinematicPlayer({
   };
 
   const toggleFullscreen = async () => {
+    if (isControlsLocked) return;
     const container = containerRef.current;
 
     if (!container) return;
@@ -180,6 +227,7 @@ export default function CinematicPlayer({
   };
 
   const changePlaybackRate = (rate) => {
+    if (isControlsLocked) return;
     const video = videoRef?.current;
 
     if (!video || !canControlPlayback) return;
@@ -190,6 +238,7 @@ export default function CinematicPlayer({
   };
 
   const handleSubtitleChange = (variantId) => {
+    if (isControlsLocked) return;
     onSubtitleChange?.(variantId);
     setShowSettings(false);
   };
@@ -326,7 +375,16 @@ export default function CinematicPlayer({
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onSeeked={onSeeked}
-          onClick={togglePlay}
+          onClick={() => {
+            if (isControlsLocked) return;
+            if (canStartFromHero && videoRef.current?.paused) {
+              videoRef.current.play().catch((error) => {
+                console.error("Video playback failed:", error);
+              });
+              return;
+            }
+            togglePlay();
+          }}
           className="h-full w-full bg-black object-contain"
         >
           {subtitleVariants.map((variant) => (
@@ -350,7 +408,7 @@ export default function CinematicPlayer({
 
         {/* Top bar */}
         <AnimatePresence>
-          {showControls && (
+          {showControls && !isControlsLocked && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -397,7 +455,7 @@ export default function CinematicPlayer({
 
         {/* Center controls */}
         <AnimatePresence>
-          {showControls && !isBuffering && (
+          {showControls && !isControlsLocked && !isBuffering && (
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -451,7 +509,7 @@ export default function CinematicPlayer({
 
         {/* Bottom controls */}
         <AnimatePresence>
-          {showControls && (
+          {showControls && !isControlsLocked && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -478,6 +536,20 @@ export default function CinematicPlayer({
                   aria-label="Video progress"
                   className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
+
+                {showVotingMarkers && duration > 0 && variationPoints.map((point) => {
+                  const markerTime = Number(point.startTime);
+                  if (!Number.isFinite(markerTime) || markerTime < 0 || markerTime > duration) return null;
+                  return (
+                    <span
+                      key={point.eventId || point.variationId}
+                      title={`${point.description || point.text || "Voting point"} · ${formatTime(markerTime)}`}
+                      aria-label={`Voting point at ${formatTime(markerTime)}`}
+                      className="pointer-events-none absolute z-20 h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
+                      style={{ left: `${(markerTime / duration) * 100}%` }}
+                    />
+                  );
+                })}
 
                 <div
                   className="pointer-events-none absolute h-3 w-3 rounded-full bg-red-600 opacity-0 transition-opacity group-hover/progress:opacity-100"
@@ -537,13 +609,24 @@ export default function CinematicPlayer({
 
                 {/* Right controls */}
                 <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-                  {subtitleVariants.length > 0 && (
-                    <div className="relative">
+                  {variationPoints.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowVotingMarkers((visible) => !visible)}
+                      aria-label={showVotingMarkers ? "Hide voting timeline markers" : "Show voting timeline markers"}
+                      aria-pressed={showVotingMarkers}
+                      title={showVotingMarkers ? "Hide voting markers" : "Show voting markers"}
+                      className={`transition hover:text-red-400 ${showVotingMarkers ? "text-red-400" : "text-white/55"}`}
+                    >
+                      <GitBranch size={19} />
+                    </button>
+                  )}
+                  <div className="relative flex items-center">
                       <button
                         type="button"
                         onClick={() => setShowSettings((value) => !value)}
                         aria-label="Subtitle and playback settings"
-                        className="transition hover:text-red-400"
+                        className="flex h-8 w-8 items-center justify-center transition hover:text-red-400"
                       >
                         <Settings size={19} />
                       </button>
@@ -623,9 +706,21 @@ export default function CinematicPlayer({
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
-                  )}
+                  </div>
 
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsControlsLocked(true);
+                      setShowSettings(false);
+                      setShowControls(false);
+                    }}
+                    aria-label="Lock video controls"
+                    title="Lock controls"
+                    className="flex h-8 w-8 items-center justify-center transition hover:text-red-400"
+                  >
+                    <Lock size={19} />
+                  </button>
                   <button
                     type="button"
                     onClick={toggleFullscreen}
@@ -643,6 +738,23 @@ export default function CinematicPlayer({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Minimal lock indicator; video remains visually unchanged */}
+        {isControlsLocked && (
+          <button
+            type="button"
+            onClick={() => {
+              setIsControlsLocked(false);
+              setShowControls(true);
+              scheduleHideControls();
+            }}
+            aria-label="Unlock video controls"
+            title="Unlock controls"
+            className="absolute left-4 top-4 z-40 rounded-full border border-white/20 bg-black/65 p-2.5 text-white shadow-lg transition hover:scale-105 hover:bg-black/85"
+          >
+            <Lock size={19} />
+          </button>
+        )}
 
         {/* Viewer permission indicator */}
         {!isHost && showControls && (

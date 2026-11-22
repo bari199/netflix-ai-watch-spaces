@@ -19,6 +19,7 @@ import {
   setParticipantMuteController,
   removeParticipantController,
   setWatchSpaceLockController,
+  setPlaybackModeController,
   transferWatchSpaceHostController,
   getUpcomingScheduledWatchSpacesController,
   getMyActiveWatchSpacesController,
@@ -262,6 +263,23 @@ router.patch(
 
   validate,
   setWatchSpaceLockController,
+);
+
+// ==========================================
+// Change playback mode (Current Host Only)
+// ==========================================
+
+router.patch(
+  "/:watchSpaceId/playback-mode",
+  authenticate,
+  allowWatchSpaceUsers,
+  authorizeWatchSpaceHost,
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+  body("mode")
+    .isIn(["manual", "automatic"])
+    .withMessage("Playback mode must be manual or automatic"),
+  validate,
+  setPlaybackModeController,
 );
 
 // ==========================================

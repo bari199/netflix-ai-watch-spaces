@@ -42,6 +42,7 @@ const createTimelineEvent = (eventType, duration) => {
     return {
       ...event,
       variationId: createId("variation"),
+      question: "",
       options: [
         { id: createId("option"), label: "Option A" },
         { id: createId("option"), label: "Option B" },
@@ -356,6 +357,26 @@ const VariationTimelineEditor = ({ timeline = [], onChange, duration }) => {
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         This ID is used by the Watch Space voting socket.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-medium text-gray-400">
+                        Voting Question
+                      </label>
+                      <input
+                        type="text"
+                        value={event.question || ""}
+                        onChange={(inputEvent) =>
+                          updateEvent(index, {
+                            question: inputEvent.target.value,
+                          })
+                        }
+                        placeholder="e.g. Which path should the hero choose?"
+                        className={inputClass}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        This question appears above the voting options. If left empty, the event text is used.
                       </p>
                     </div>
 

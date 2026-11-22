@@ -2,6 +2,10 @@ import mongoose from "mongoose";
 import Title from "../models/Title.js";
 import WatchSpace from "../models/WatchSpace.js";
 import { recordPlaybackProgress } from "../services/interaction.service.js";
+import {
+  closeExpiredAutomaticVote,
+  triggerDueAutomaticVariationVote,
+} from "./variation.socket.js";
 
 // Playback synchronization configuration
 const DRIFT_THRESHOLD_SECONDS = 0.25;
@@ -129,6 +133,8 @@ export const triggerDueTriviaEvents = async (
   }
 };
 
+
+
 export const applyDueVariation = async (
   io,
   watchSpaceId,
@@ -168,6 +174,7 @@ export const applyDueVariation = async (
     const vote = watchSpace.activeVote;
 
     io.to(`watchspace:${watchSpaceId}`).emit("room.variation.applied", {
+      watchSpaceId: watchSpaceId.toString(),
       variationId: vote.variationId,
       winningOptionId: vote.winningOptionId,
       applyAtSeconds: vote.applyAtSeconds,
@@ -179,6 +186,41 @@ export const applyDueVariation = async (
     );
   } catch (error) {
     console.error("Variation application error:", error);
+  }
+};
+
+export const applyDueClosedVariation = async (io, watchSpaceId, currentPosition) => {
+  if (!Number.isFinite(currentPosition) || currentPosition < 0) return;
+
+  try {
+    const watchSpace = await WatchSpace.findOneAndUpdate(
+      {
+        _id: watchSpaceId,
+        "activeVote.status": "closed",
+        "activeVote.appliedAt": null,
+        $expr: { $lte: ["$activeVote.applyAtSeconds", currentPosition] },
+      },
+      {
+        $set: {
+          "activeVote.status": "applied",
+          "activeVote.appliedAt": new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    if (!watchSpace?.activeVote) return;
+
+    const vote = watchSpace.activeVote;
+    io.to(`watchspace:${watchSpaceId}`).emit("room.variation.applied", {
+      watchSpaceId: watchSpaceId.toString(),
+      variationId: vote.variationId,
+      winningOptionId: vote.winningOptionId,
+      applyAtSeconds: vote.applyAtSeconds,
+      appliedAt: vote.appliedAt,
+    });
+  } catch (error) {
+    console.error("Due variation recovery error:", error);
   }
 };
 
@@ -315,6 +357,55 @@ const registerPlaybackHandlers = (io, socket) => {
 
     return flushed;
   };
+
+  socket.on("room.playback.mode.update", async (data = {}, callback) => {
+    try {
+      const { watchSpaceId, mode } = data;
+      if (!mongoose.isValidObjectId(watchSpaceId)) {
+        throw new Error("Invalid WatchSpace ID");
+      }
+      if (!["manual", "automatic"].includes(mode)) {
+        throw new Error("Invalid playback mode");
+      }
+      const roomName = `watchspace:${watchSpaceId}`;
+      if (!socket.rooms.has(roomName)) {
+        throw new Error("You are not connected to this WatchSpace");
+      }
+
+      const watchSpace = await WatchSpace.findById(watchSpaceId);
+      if (!watchSpace) throw new Error("WatchSpace not found");
+      if (watchSpace.status === "ended") {
+        throw new Error("This WatchSpace has already ended");
+      }
+      if (watchSpace.host.toString() !== getUserId()) {
+        throw new Error("Only the host can change playback mode");
+      }
+      if (
+        watchSpace.activeVote &&
+        ["open", "closed"].includes(watchSpace.activeVote.status)
+      ) {
+        throw new Error("Finish the current story vote before changing mode");
+      }
+
+      watchSpace.playbackMode = mode;
+      await watchSpace.save();
+
+      if (typeof callback === "function") {
+        callback({ success: true, playbackMode: mode });
+      }
+
+      io.to(roomName).emit("room.playback.mode.changed", {
+        watchSpaceId: watchSpaceId.toString(),
+        mode,
+        updatedBy: getUserId(),
+      });
+
+    } catch (error) {
+      if (typeof callback === "function") {
+        callback({ success: false, message: error.message });
+      }
+    }
+  });
 
   socket.on("playback.control", async (data, callback) => {
     try {
@@ -602,6 +693,17 @@ const registerPlaybackHandlers = (io, socket) => {
           watchSpace,
         );
 
+        // Automatic story voting is server-authoritative and starts only
+        // when the host's playing timeline crosses a variation marker.
+        await closeExpiredAutomaticVote(io, watchSpaceId.toString());
+        await triggerDueAutomaticVariationVote(
+          io,
+          watchSpaceId.toString(),
+          previousHostPosition,
+          positionSeconds,
+          watchSpace,
+        );
+
         hostPlaybackPositions.set(watchSpaceId.toString(), {
           positionSeconds,
           receivedAt,
@@ -622,6 +724,14 @@ const registerPlaybackHandlers = (io, socket) => {
           previousHostPosition,
           positionSeconds,
           watchSpace.playback.state,
+        );
+
+        // Recover closed votes when the timeline marker is reached on a
+        // fresh server process or after the host reconnects.
+        await applyDueClosedVariation(
+          io,
+          watchSpaceId.toString(),
+          positionSeconds,
         );
 
         hostPlaybackPositions.set(watchSpaceId.toString(), {

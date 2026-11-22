@@ -60,6 +60,15 @@ export const setWatchSpaceLock = async (watchSpaceId, isLocked) => {
   return response.data;
 };
 
+// Change the room playback mode (host only).
+export const setPlaybackMode = async (watchSpaceId, mode) => {
+  const response = await api.patch(
+    `/watch-spaces/${watchSpaceId}/playback-mode`,
+    { mode },
+  );
+  return response.data;
+};
+
 // Mute or unmute a participant
 export const setParticipantMute = async (
   watchSpaceId,

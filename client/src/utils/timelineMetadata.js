@@ -165,6 +165,7 @@ export const normalizeTimelineForSubmission = (timeline) => {
 
     if (event.eventType === "variationPoint") {
       normalizedEvent.variationId = String(event.variationId || "").trim();
+      normalizedEvent.question = String(event.question || "").trim();
       normalizedEvent.options = (event.options || []).map((option) => ({
         ...option,
         id: String(option.id || "").trim(),

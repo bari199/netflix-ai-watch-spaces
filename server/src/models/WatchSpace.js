@@ -78,6 +78,21 @@ const activeVoteSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    question: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    eventId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    mode: {
+      type: String,
+      enum: ["manual", "automatic"],
+      default: "manual",
+    },
     options: [
       {
         id: {
@@ -153,6 +168,11 @@ const watchSpaceSchema = new mongoose.Schema(
       type: playbackSchema,
       default: () => ({}),
     },
+    playbackMode: {
+      type: String,
+      enum: ["manual", "automatic"],
+      default: "manual",
+    },
     maxParticipants: {
       type: Number,
       default: 50,
@@ -169,6 +189,10 @@ const watchSpaceSchema = new mongoose.Schema(
       default: true,
     },
     triggeredTriviaEventIds: {
+      type: [String],
+      default: [],
+    },
+    triggeredVariationEventIds: {
       type: [String],
       default: [],
     },

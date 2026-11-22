@@ -161,6 +161,11 @@ const timelineEventSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    question: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     transcript: {
       type: String,
       default: "",

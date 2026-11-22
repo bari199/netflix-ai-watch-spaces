@@ -10,6 +10,7 @@ import {
   leaveWatchSpace,
   endWatchSpace,
   setWatchSpaceLock,
+  setPlaybackMode,
   setParticipantMute,
   removeParticipant,
   transferWatchSpaceHost,
@@ -32,6 +33,10 @@ import TriviaNotification from "../../components/watchspace/common/TriviaNotific
 import ErrorAlert from "../../components/watchspace/common/ErrorAlert.jsx";
 import HostDisconnectedAlert from "../../components/watchspace/common/HostDisconnectedAlert.jsx";
 import LoadingScreen from "../../components/watchspace/common/LoadingScreen.jsx";
+import {
+  playWatchSpaceFeedback,
+  unlockWatchSpaceAudio,
+} from "../../utils/watchSpaceFeedback.js";
 
 // Configure VITE_API_BASE_URL in the frontend .env file.
 // The relative fallback avoids hardcoding a local development host.
@@ -75,12 +80,16 @@ const WatchPageDetails = () => {
   const [voteResult, setVoteResult] = useState(null);
   const [voteMessage, setVoteMessage] = useState("");
   const [voteLoading, setVoteLoading] = useState(false);
+  const [unreadVoteCount, setUnreadVoteCount] = useState(0);
   const [triviaCards, setTriviaCards] = useState([]);
   const [subtitleSelection, setSubtitleSelection] = useState(null);
   const [playerStarted, setPlayerStarted] = useState(false);
+  const [startPlayerOnMount, setStartPlayerOnMount] = useState(false);
+  const [playbackModeSaving, setPlaybackModeSaving] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState("chat");
 
   const videoRef = useRef(null);
+  const activeSidebarTabRef = useRef("chat");
   const chatMessagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const aiSubmittingRef = useRef(false);
@@ -121,6 +130,9 @@ const WatchPageDetails = () => {
       const fetchedWatchSpace = response?.watchSpace || null;
       setWatchSpace(fetchedWatchSpace);
       setActiveVote(fetchedWatchSpace?.activeVote || null);
+      setUnreadVoteCount(
+        fetchedWatchSpace?.activeVote?.status === "open" ? 1 : 0,
+      );
     } catch (err) {
       if (requestId === fetchRequestIdRef.current) {
         setError(err?.response?.data?.message || "Failed to load WatchSpace.");
@@ -132,6 +144,26 @@ const WatchPageDetails = () => {
       }
     }
   }, [watchSpaceId]);
+
+  useEffect(() => {
+    const unlockAudio = () => unlockWatchSpaceAudio();
+
+    // Browsers block Web Audio until a user gesture. Unlock it once while
+    // the participant interacts with the WatchSpace, before a poll arrives.
+    window.addEventListener("pointerdown", unlockAudio, {
+      once: true,
+      capture: true,
+    });
+    window.addEventListener("keydown", unlockAudio, {
+      once: true,
+      capture: true,
+    });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+  }, []);
 
   useEffect(() => {
     // Invalidate any request started for the previous route.
@@ -160,10 +192,12 @@ const WatchPageDetails = () => {
     setVoteSecondsLeft(0);
     setVoteResult(null);
     setVoteMessage("");
+    setUnreadVoteCount(0);
     setTriviaCards([]);
     setSubtitleSelection(null);
     setPlayerStarted(false);
     setActiveSidebarTab("chat");
+    activeSidebarTabRef.current = "chat";
 
     seenTriviaEventIdsRef.current.clear();
   }, [watchSpaceId]);
@@ -245,6 +279,7 @@ const WatchPageDetails = () => {
 
   const title = watchSpace?.title;
   const titleId = getUserId(title);
+  const displayTitle = title?.name || title?.title || "Untitled Movie";
   const playbackPosition = Number(watchSpace?.playback?.positionSeconds) || 0;
   const activeTimelineEvent = (title?.timeline || [])
     .filter(
@@ -355,13 +390,22 @@ const WatchPageDetails = () => {
     const video = videoRef.current;
     if (!video) return;
 
-    Array.from(video.textTracks).forEach((track, index) => {
-      track.mode =
-        subtitleVariants[index]?.variantId === selectedSubtitle?.variantId
-          ? "showing"
-          : "disabled";
-    });
-  }, [subtitleVariants, selectedSubtitle?.variantId]);
+    const updateSubtitleTracks = () => {
+      Array.from(video.textTracks).forEach((track) => {
+        track.mode =
+          selectedSubtitle && track.label === selectedSubtitle.label
+            ? "showing"
+            : "disabled";
+      });
+    };
+
+    updateSubtitleTracks();
+    video.textTracks.addEventListener?.("addtrack", updateSubtitleTracks);
+
+    return () => {
+      video.textTracks.removeEventListener?.("addtrack", updateSubtitleTracks);
+    };
+  }, [subtitleVariants, selectedSubtitle?.variantId, selectedSubtitle?.label]);
 
   // Socket Connection, Chat, Presence and Playback Sync
   useEffect(() => {
@@ -399,6 +443,94 @@ const WatchPageDetails = () => {
 
         console.log("WatchSpace room joined:", response);
 
+        if (["manual", "automatic"].includes(response.playbackMode)) {
+          setWatchSpace((previous) =>
+            previous
+              ? { ...previous, playbackMode: response.playbackMode }
+              : previous,
+          );
+        }
+
+        // Apply a pending restoration after the video metadata is available.
+        const playback = response.playback;
+        if (playback && Number.isFinite(Number(playback.positionSeconds))) {
+          const restoredPosition = Math.max(0, Number(playback.positionSeconds));
+          const restoredState = playback.state || "paused";
+
+          setWatchSpace((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  playback: {
+                    ...previous.playback,
+                    ...playback,
+                    positionSeconds: restoredPosition,
+                    state: restoredState,
+                  },
+                }
+              : previous,
+          );
+
+          const restoreVideo = () => {
+            const video = videoRef.current;
+            if (!video || video.readyState < 1) return false;
+
+            applyingRemoteUpdateRef.current = true;
+            if (Math.abs(video.currentTime - restoredPosition) > 0.5) {
+              video.currentTime = restoredPosition;
+            }
+
+            if (restoredState === "playing") {
+              video.play().catch((playError) => {
+                console.warn("Playback resume requires a user gesture:", playError?.message);
+              });
+            } else {
+              video.pause();
+            }
+
+            requestAnimationFrame(() => {
+              applyingRemoteUpdateRef.current = false;
+            });
+            return true;
+          };
+
+          if (!restoreVideo()) {
+            const video = videoRef.current;
+            if (video) {
+              const handleMetadata = () => {
+                restoreVideo();
+                video.removeEventListener("loadedmetadata", handleMetadata);
+              };
+              video.addEventListener("loadedmetadata", handleMetadata);
+            }
+          }
+        }
+
+        socket.emit(
+          "variation.vote.state.get",
+          { watchSpaceId },
+          (voteStateResponse) => {
+            if (!active || !voteStateResponse?.success) return;
+            const persistedVote = voteStateResponse.activeVote || null;
+            setActiveVote(persistedVote);
+            if (persistedVote?.status === "closed") {
+              setVoteResult({
+                variationId: persistedVote.variationId,
+                voteCounts: Object.fromEntries(
+                  (persistedVote.options || []).map((option) => [
+                    option.id,
+                    (persistedVote.votes || []).filter(
+                      (vote) => vote.optionId === option.id,
+                    ).length,
+                  ]),
+                ),
+                winningOptionId: persistedVote.winningOptionId,
+                applyAtSeconds: persistedVote.applyAtSeconds,
+              });
+            }
+          },
+        );
+
         socket.emit("presence.join", { watchSpaceId }, (presenceResponse) => {
           if (!active) return;
 
@@ -432,6 +564,18 @@ const WatchPageDetails = () => {
           },
         );
       });
+    };
+
+    const handlePlaybackModeChanged = (data) => {
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !["manual", "automatic"].includes(data?.mode)
+      ) return;
+
+      setWatchSpace((previous) =>
+        previous ? { ...previous, playbackMode: data.mode } : previous,
+      );
     };
 
     const handleDisconnect = (reason) => {
@@ -713,21 +857,37 @@ const WatchPageDetails = () => {
 
     // Narrative Variation Voting Events
     const handleVoteOpen = (data) => {
-      if (!active || !data?.variationId) return;
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !data?.variationId
+      ) return;
 
       setActiveVote({
         variationId: data.variationId,
+        question: data.question || "",
+        eventId: data.eventId || null,
+        mode: data.mode || "manual",
         options: data.options || [],
         status: "open",
+        durationSeconds: data.durationSeconds || 30,
         closesAt: data.closesAt,
       });
+      if (activeSidebarTabRef.current !== "vote") {
+        setUnreadVoteCount((count) => count + 1);
+      }
       setSelectedVoteOption("");
       setVoteResult(null);
+      playWatchSpaceFeedback();
       setVoteMessage("A new group vote has started.");
     };
 
     const handleVoteResult = (data) => {
-      if (!active || !data?.variationId) return;
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !data?.variationId
+      ) return;
 
       setActiveVote((previous) => {
         if (!previous || previous.variationId !== data.variationId) {
@@ -744,11 +904,16 @@ const WatchPageDetails = () => {
       });
 
       setVoteResult(data);
+      playWatchSpaceFeedback();
       setVoteMessage("Voting has ended. The group result is ready.");
     };
 
     const handleVariationApplied = (data) => {
-      if (!active || !data?.variationId) return;
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !data?.variationId
+      ) return;
 
       setActiveVote((previous) => {
         if (!previous || previous.variationId !== data.variationId) {
@@ -764,6 +929,7 @@ const WatchPageDetails = () => {
         };
       });
 
+      playWatchSpaceFeedback();
       setVoteMessage("The selected variation has been applied.");
     };
 
@@ -790,6 +956,7 @@ const WatchPageDetails = () => {
     socket.on("connect_error", handleConnectError);
 
     socket.on("room.playback.update", handlePlaybackUpdate);
+    socket.on("room.playback.mode.changed", handlePlaybackModeChanged);
     socket.on("room.playback.position", handleAuthoritativePosition);
 
     socket.on("room.sync.correction", handleSyncCorrection);
@@ -853,6 +1020,7 @@ const WatchPageDetails = () => {
       socket.off("connect_error", handleConnectError);
 
       socket.off("room.playback.update", handlePlaybackUpdate);
+      socket.off("room.playback.mode.changed", handlePlaybackModeChanged);
       socket.off("room.playback.position", handleAuthoritativePosition);
 
       socket.off("room.sync.correction", handleSyncCorrection);
@@ -887,6 +1055,36 @@ const WatchPageDetails = () => {
     watchSpaceId,
     currentUserId,
   ]);
+
+  // The Hero is rendered before the video element exists. Wait until the
+  // player is mounted, then start the media as soon as it can play.
+  useEffect(() => {
+    if (!startPlayerOnMount || !playerStarted) return undefined;
+
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    let cancelled = false;
+    const startPlayback = () => {
+      if (cancelled) return;
+      setStartPlayerOnMount(false);
+      video.play().catch((playError) => {
+        console.warn("Video autoplay was blocked:", playError?.message);
+        setError("Press Play in the video player to start playback.");
+      });
+    };
+
+    if (video.readyState >= 2) {
+      requestAnimationFrame(startPlayback);
+    } else {
+      video.addEventListener("canplay", startPlayback, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("canplay", startPlayback);
+    };
+  }, [startPlayerOnMount, playerStarted]);
 
   // Keep the vote countdown synchronized with the backend closesAt timestamp.
   useEffect(() => {
@@ -997,7 +1195,9 @@ const WatchPageDetails = () => {
       const payload = {
         watchSpaceId,
         action,
-        positionSeconds: video.currentTime,
+        positionSeconds: Number.isFinite(video.currentTime)
+          ? video.currentTime
+          : playbackPosition,
       };
 
       socket.emit("playback.control", payload, (response) => {
@@ -1010,6 +1210,38 @@ const WatchPageDetails = () => {
     },
     [isHost, watchSpaceId],
   );
+
+  // Change host playback mode without navigating or refreshing the page.
+  const handlePlaybackModeChange = async (mode) => {
+    if (!isHost || !watchSpace || playbackModeSaving) return;
+
+    const previousMode = watchSpace.playbackMode || "manual";
+    if (mode === previousMode) return;
+
+    setPlaybackModeSaving(true);
+    setError("");
+
+    try {
+      const response = await setPlaybackMode(watchSpaceId, mode);
+      setWatchSpace((previous) =>
+        previous
+          ? {
+              ...previous,
+              ...response.watchSpace,
+              title: previous.title,
+              playbackMode: response.watchSpace?.playbackMode || mode,
+            }
+          : previous,
+      );
+    } catch (modeError) {
+      setError(
+        modeError?.response?.data?.message ||
+          "Could not update playback mode.",
+      );
+    } finally {
+      setPlaybackModeSaving(false);
+    }
+  };
 
   // Chat Input
   const handleChatInputChange = (event) => {
@@ -1333,8 +1565,11 @@ const WatchPageDetails = () => {
     watchSpace.host?.name || watchSpace.host?.fullName || "Unknown";
 
   const currentPlaybackState = watchSpace.playback?.state || "paused";
+  // Keep the movie player mounted after it has been entered, including paused state.
   const isPlayerVisible =
-    playerStarted || currentPlaybackState === "playing" || playbackPosition > 0;
+    playerStarted ||
+    currentPlaybackState === "playing" ||
+    playbackPosition > 0;
 
   const variationPoints = Array.isArray(title?.timeline)
     ? title.timeline.filter(
@@ -1379,7 +1614,7 @@ const WatchPageDetails = () => {
                   videoUrl={videoUrl}
                   thumbnailUrl={thumbnailUrl}
                   titleId={titleId}
-                  title={title}
+                  title={displayTitle}
                   isHost={isHost}
                   subtitleVariants={subtitleVariants}
                   selectedSubtitle={selectedSubtitle}
@@ -1392,11 +1627,13 @@ const WatchPageDetails = () => {
                   }}
                   onPause={() => emitPlaybackControl("pause")}
                   onSeeked={() => emitPlaybackControl("seek")}
+                  pendingHeroStart={startPlayerOnMount}
+                  variationPoints={variationPoints}
                 />
               ) : (
                 <RoomHero
                   watchSpace={watchSpace}
-                  title={title}
+                  title={{ ...title, name: displayTitle }}
                   hostName={hostName}
                   participantCount={participants.length}
                   isEnded={isEnded}
@@ -1404,16 +1641,8 @@ const WatchPageDetails = () => {
                   onPlay={
                     isHost
                       ? () => {
+                          setStartPlayerOnMount(true);
                           setPlayerStarted(true);
-                          requestAnimationFrame(() => {
-                            const video = videoRef.current;
-                            video?.play().catch((playError) => {
-                              console.error(
-                                "Video playback failed:",
-                                playError,
-                              );
-                            });
-                          });
                         }
                       : undefined
                   }
@@ -1441,14 +1670,28 @@ const WatchPageDetails = () => {
                       id={`watchspace-tab-${id}`}
                       aria-selected={isActive}
                       aria-controls={`watchspace-panel-${id}`}
-                      onClick={() => setActiveSidebarTab(id)}
+                      onClick={() => {
+                        activeSidebarTabRef.current = id;
+                        setActiveSidebarTab(id);
+                        if (id === "vote") setUnreadVoteCount(0);
+                      }}
                       className={`flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl px-1.5 py-3 text-[10px] font-semibold transition sm:text-[11px] ${
                         isActive
                           ? "bg-red-600/15 text-red-400 ring-1 ring-inset ring-red-500/25"
                           : "text-white/45 hover:bg-white/[0.06] hover:text-white/85"
                       }`}
                     >
-                      <Icon size={17} />
+                      <span className="relative inline-flex">
+                        <Icon size={17} />
+                        {id === "vote" && unreadVoteCount > 0 && (
+                          <span
+                            aria-label={`${unreadVoteCount} new group vote${unreadVoteCount === 1 ? "" : "s"}`}
+                            className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full border border-[#101010] bg-red-600 px-1 text-[9px] font-extrabold leading-none text-white shadow-lg"
+                          >
+                            {unreadVoteCount > 99 ? "99+" : unreadVoteCount}
+                          </span>
+                        )}
+                      </span>
                       <span className="truncate">{label}</span>
                     </button>
                   );
@@ -1543,6 +1786,9 @@ const WatchPageDetails = () => {
                     isHost={isHost}
                     isEnded={isEnded}
                     votingEnabled={Boolean(watchSpace.votingEnabled)}
+                    playbackMode={watchSpace.playbackMode || "manual"}
+                    playbackModeSaving={playbackModeSaving}
+                    onPlaybackModeChange={handlePlaybackModeChange}
                     activeVote={activeVote}
                     voteSecondsLeft={voteSecondsLeft}
                     variationPoints={variationPoints}

@@ -14,6 +14,9 @@ export default function GroupStoryVote({
   isHost = false,
   isEnded = false,
   votingEnabled = false,
+  playbackMode = "manual",
+  playbackModeSaving = false,
+  onPlaybackModeChange,
 
   activeVote,
   voteSecondsLeft = 0,
@@ -44,6 +47,8 @@ export default function GroupStoryVote({
   const isVoteOpen = activeVote?.status === "open";
   const isVoteClosed = activeVote?.status === "closed";
   const isVoteApplied = activeVote?.status === "applied";
+  const modeChangeDisabled =
+    playbackModeSaving || isVoteOpen || isVoteClosed;
 
   const winningOption = activeVote?.options?.find(
     (option) =>
@@ -94,8 +99,64 @@ export default function GroupStoryVote({
       </div>
 
       <div className="space-y-4 p-4">
-        {/* Host: Start a vote */}
-        {isHost && !isVoteOpen && variationPoints.length > 0 && (
+        {/* Voting mode belongs to the Group Story Vote panel. */}
+        <section className="rounded-lg border border-white/10 bg-[#191919] p-3">
+          <div className="mb-2">
+            <p className="text-xs font-bold text-white">Voting mode</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/45">
+              {playbackMode === "automatic"
+                ? "Polls start when playback reaches a timeline marker. Each poll stays open for 60 seconds while the video continues."
+                : "The host chooses a story variation and starts each poll manually."}
+            </p>
+          </div>
+
+          {isHost ? (
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-black/35 p-1">
+              {["manual", "automatic"].map((mode) => {
+                const selected = playbackMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    disabled={modeChangeDisabled}
+                    aria-pressed={selected}
+                    onClick={() => onPlaybackModeChange?.(mode)}
+                    className={`rounded-md px-2 py-2 text-[11px] font-semibold capitalize transition disabled:cursor-wait disabled:opacity-50 ${
+                      selected
+                        ? "bg-red-600 text-white shadow"
+                        : "text-white/55 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[10px] font-semibold capitalize text-red-300">
+              {playbackMode} mode
+            </p>
+          )}
+          {playbackModeSaving && (
+            <p className="mt-2 text-[10px] text-white/40">Saving voting mode...</p>
+          )}
+        </section>
+
+        {playbackMode === "automatic" &&
+          !isVoteOpen &&
+          !isVoteClosed &&
+          !isVoteApplied && (
+            <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-[11px] leading-relaxed text-white/55">
+              Waiting for playback to reach the next story voting marker.
+            </p>
+          )}
+
+        {/* Host: Start a vote manually */}
+        {playbackMode === "manual" &&
+          isHost &&
+          !isVoteOpen &&
+          !isVoteClosed &&
+          variationPoints.length > 0 && (
           <div className="rounded-lg border border-white/10 bg-[#191919] p-3">
             <div className="mb-3 flex items-center gap-2">
               <Vote size={15} className="text-red-400" />
@@ -169,13 +230,25 @@ export default function GroupStoryVote({
         {activeVote?.options?.length > 0 ? (
           <div className="space-y-3">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                Current variation
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-red-300">
+                {isVoteOpen ? "Voting question" : "Story question"}
               </p>
 
-              <p className="mt-1 text-xs font-semibold text-white/85">
-                {selectedVariation?.description?.trim() || "Story variation"}
+              <p className="mt-1 text-sm font-semibold leading-relaxed text-white">
+                {activeVote.question?.trim() ||
+                  selectedVariation?.question?.trim() ||
+                  selectedVariation?.text?.trim() ||
+                  selectedVariation?.description?.trim() ||
+                  "What should happen next?"}
               </p>
+
+              {selectedVariation?.description?.trim() &&
+                activeVote.question?.trim() &&
+                selectedVariation.description.trim() !== activeVote.question.trim() && (
+                  <p className="mt-1 text-[10px] text-white/40">
+                    {selectedVariation.description.trim()}
+                  </p>
+                )}
 
               {isVoteOpen && (
                 <p className="mt-1 text-[10px] leading-relaxed text-white/40">
