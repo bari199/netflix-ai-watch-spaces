@@ -199,6 +199,11 @@ export const triggerDueAutomaticVariationVote = async (
 
   const activeVote = {
     variationId: dueEvent.variationId,
+    question:
+      dueEvent.question?.trim() ||
+      dueEvent.text?.trim() ||
+      dueEvent.description?.trim() ||
+      "",
     eventId: dueEvent.eventId,
     mode: "automatic",
     options,
@@ -236,9 +241,11 @@ export const triggerDueAutomaticVariationVote = async (
   io.to(getRoomName(targetId)).emit("room.variation.voteOpen", {
     watchSpaceId: targetId,
     variationId: dueEvent.variationId,
+    question: activeVote.question,
     eventId: dueEvent.eventId,
     options,
     closesAt,
+    durationSeconds,
     mode: "automatic",
   });
 
@@ -396,6 +403,11 @@ const registerVariationHandlers = (io, socket) => {
 
       watchSpace.activeVote = {
         variationId,
+        question:
+          variationEvent.question?.trim() ||
+          variationEvent.text?.trim() ||
+          variationEvent.description?.trim() ||
+          "",
         mode: "manual",
         options,
         status: "open",
@@ -415,6 +427,7 @@ const registerVariationHandlers = (io, socket) => {
       io.to(roomName).emit("room.variation.voteOpen", {
         watchSpaceId: watchSpaceId.toString(),
         variationId,
+        question: watchSpace.activeVote.question,
         options,
         closesAt,
         durationSeconds,
