@@ -1143,7 +1143,11 @@ const WatchPageDetails = () => {
   // Host Playback Controls
   const emitPlaybackControl = useCallback(
     (action) => {
-      if (!isHost || applyingRemoteUpdateRef.current) {
+      if (
+        !isHost ||
+        applyingRemoteUpdateRef.current ||
+        watchSpace?.playbackMode === "automatic"
+      ) {
         return;
       }
 
@@ -1171,7 +1175,7 @@ const WatchPageDetails = () => {
         }
       });
     },
-    [isHost, watchSpaceId],
+    [isHost, watchSpaceId, watchSpace?.playbackMode],
   );
 
   // Change host playback mode without navigating or refreshing the page.
