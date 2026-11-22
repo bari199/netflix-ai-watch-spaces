@@ -380,6 +380,12 @@ const registerPlaybackHandlers = (io, socket) => {
       if (watchSpace.host.toString() !== getUserId()) {
         throw new Error("Only the host can change playback mode");
       }
+      if (
+        watchSpace.activeVote &&
+        ["open", "closed"].includes(watchSpace.activeVote.status)
+      ) {
+        throw new Error("Finish the current story vote before changing mode");
+      }
 
       watchSpace.playbackMode = mode;
       await watchSpace.save();
