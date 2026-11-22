@@ -14,6 +14,9 @@ export default function GroupStoryVote({
   isHost = false,
   isEnded = false,
   votingEnabled = false,
+  playbackMode = "manual",
+  playbackModeSaving = false,
+  onPlaybackModeChange,
 
   activeVote,
   voteSecondsLeft = 0,
@@ -94,8 +97,51 @@ export default function GroupStoryVote({
       </div>
 
       <div className="space-y-4 p-4">
-        {/* Host: Start a vote */}
-        {isHost && !isVoteOpen && variationPoints.length > 0 && (
+        {/* Voting mode belongs to the Group Story Vote panel. */}
+        <section className="rounded-lg border border-white/10 bg-[#191919] p-3">
+          <div className="mb-2">
+            <p className="text-xs font-bold text-white">Voting mode</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/45">
+              {playbackMode === "automatic"
+                ? "Polls start when playback reaches a timeline marker. Each poll stays open for 60 seconds while the video continues."
+                : "The host chooses a story variation and starts each poll manually."}
+            </p>
+          </div>
+
+          {isHost ? (
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-black/35 p-1">
+              {["manual", "automatic"].map((mode) => {
+                const selected = playbackMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    disabled={playbackModeSaving}
+                    aria-pressed={selected}
+                    onClick={() => onPlaybackModeChange?.(mode)}
+                    className={`rounded-md px-2 py-2 text-[11px] font-semibold capitalize transition disabled:cursor-wait disabled:opacity-50 ${
+                      selected
+                        ? "bg-red-600 text-white shadow"
+                        : "text-white/55 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[10px] font-semibold capitalize text-red-300">
+              {playbackMode} mode
+            </p>
+          )}
+          {playbackModeSaving && (
+            <p className="mt-2 text-[10px] text-white/40">Saving voting mode...</p>
+          )}
+        </section>
+
+        {/* Host: Start a vote manually */}
+        {playbackMode === "manual" && isHost && !isVoteOpen && variationPoints.length > 0 && (
           <div className="rounded-lg border border-white/10 bg-[#191919] p-3">
             <div className="mb-3 flex items-center gap-2">
               <Vote size={15} className="text-red-400" />
