@@ -231,6 +231,23 @@ const watchSpaceSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    votingMode: {
+      type: String,
+      enum: ["manual", "automatic"],
+      default: "manual",
+    },
+    automaticVoteDurationSeconds: {
+      type: Number,
+      default: 60,
+      min: 5,
+      max: 120,
+    },
+    triggeredVariationVoteIds: {
+      type: [String],
+      default: [],
+    },
+
     isPrivate: {
       type: Boolean,
       default: false,

@@ -17,7 +17,7 @@ const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
 
     const user = await User.findById(decoded.sub).select(
-      "_id name email avatar role isEmailVerified authProvider",
+      "_id name email avatar role isEmailVerified authProvider notificationPreferences",
     );
 
     if (!user) {

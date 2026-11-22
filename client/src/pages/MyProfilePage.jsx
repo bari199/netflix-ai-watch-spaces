@@ -25,6 +25,7 @@ import {
   EyeOff,
   PanelLeftClose,
   PanelLeftOpen,
+  VolumeX,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -414,6 +415,11 @@ function MyProfilePage() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
+
+  // Persistent Watch Space notification preferences
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
 
   const avatarInputRef = useRef(null);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
@@ -838,6 +844,45 @@ function MyProfilePage() {
   // ==========================================
   // Settings: Password Reset
   // ==========================================
+
+  const handleNotificationPreferenceChange = async (key, enabled) => {
+    const currentPreferences = {
+      soundEnabled: user?.notificationPreferences?.soundEnabled ?? true,
+      vibrationEnabled: user?.notificationPreferences?.vibrationEnabled ?? true,
+    };
+    const nextPreferences = { ...currentPreferences, [key]: enabled };
+
+    setNotificationSaving(true);
+    setNotificationError("");
+    setNotificationMessage("");
+
+    try {
+      const response = await api.patch("/users/me", {
+        notificationPreferences: nextPreferences,
+      });
+      const updatedUser = response?.data?.user ?? response?.data;
+
+      setUser((previousUser) => ({
+        ...previousUser,
+        ...updatedUser,
+        notificationPreferences:
+          updatedUser?.notificationPreferences ?? nextPreferences,
+      }));
+      setNotificationMessage("Notification preferences saved.");
+    } catch (err) {
+      setNotificationError(
+        err?.response?.data?.message ||
+          "Could not save notification preferences. Please try again.",
+      );
+    } finally {
+      setNotificationSaving(false);
+    }
+  };
+
+  const notificationPreferences = {
+    soundEnabled: user?.notificationPreferences?.soundEnabled ?? true,
+    vibrationEnabled: user?.notificationPreferences?.vibrationEnabled ?? true,
+  };
 
   const renderSettings = () => (
     <div className="max-w-md space-y-6">

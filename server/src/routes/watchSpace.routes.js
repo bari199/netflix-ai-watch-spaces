@@ -26,6 +26,7 @@ import {
   getMyEndedWatchSpacesController,
   getMyHostedWatchSpacesController,
   deleteWatchSpaceController,
+  updateWatchSpaceVotingSettingsController,
 } from "../controllers/watchSpace.controller.js";
 
 const router = express.Router();

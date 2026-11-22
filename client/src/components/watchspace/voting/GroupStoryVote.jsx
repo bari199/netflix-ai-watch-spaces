@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+
 import {
   GitBranch,
   Vote,
@@ -7,53 +8,94 @@ import {
   Trophy,
   Play,
   LoaderCircle,
+  Users,
+  Zap,
 } from "lucide-react";
 
 export default function GroupStoryVote({
   isParticipant = false,
+
   isHost = false,
+
   isEnded = false,
+
   votingEnabled = false,
   playbackMode = "manual",
   playbackModeSaving = false,
   onPlaybackModeChange,
 
   activeVote,
+
   voteSecondsLeft = 0,
 
+  voteCount,
+
   variationPoints = [],
+
   selectedVariationId,
+
   setSelectedVariationId,
 
-  voteDuration,
+  voteDuration = 60,
+
   setVoteDuration,
 
+  votingMode = "manual",
+
+  setVotingMode,
+
+  votingSettingsLoading = false,
+
   handleStartVote,
+
   handleCastVote,
 
   selectedVoteOption,
+
   voteLoading = false,
+
   voteMessage,
+
   voteResult,
 }) {
   if (!isParticipant || isEnded || !votingEnabled) {
     return null;
   }
 
-  const selectedVariation = variationPoints.find(
+  const safeVariationPoints = Array.isArray(variationPoints)
+    ? variationPoints
+    : [];
+
+  const selectedVariation = safeVariationPoints.find(
     (point) => String(point.variationId) === String(activeVote?.variationId),
   );
 
   const isVoteOpen = activeVote?.status === "open";
+
   const isVoteClosed = activeVote?.status === "closed";
+
   const isVoteApplied = activeVote?.status === "applied";
   const modeChangeDisabled =
     playbackModeSaving || isVoteOpen || isVoteClosed;
 
+  const isAutomaticMode = votingMode === "automatic";
+
+  const isAutomaticVote =
+    activeVote?.automatic ?? (Boolean(activeVote) && isAutomaticMode);
+
+  const uniqueVoteCount =
+    Number.isFinite(Number(voteCount)) &&
+    voteCount !== null &&
+    voteCount !== undefined
+      ? Number(voteCount)
+      : Array.isArray(activeVote?.votes)
+        ? activeVote.votes.length
+        : 0;
+
   const winningOption = activeVote?.options?.find(
     (option) =>
       option.id ===
-      (voteResult?.winningOptionId || activeVote?.winningOptionId),
+      (voteResult?.winningOptionId ?? activeVote?.winningOptionId),
   );
 
   return (
@@ -63,6 +105,7 @@ export default function GroupStoryVote({
       className="h-full overflow-hidden rounded-xl border border-white/10 bg-[#111111] shadow-xl"
     >
       {/* Header */}
+
       <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-gradient-to-r from-[#211010] to-[#151515] p-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600/15 text-red-500">
@@ -79,10 +122,18 @@ export default function GroupStoryVote({
         </div>
 
         {isVoteOpen ? (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1.5 text-[9px] font-bold text-green-400">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-            {voteSecondsLeft}s
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="flex items-center gap-1 rounded-full bg-white/5 px-2 py-1.5 text-[9px] font-bold text-white/70">
+              <Users size={11} />
+
+              {uniqueVoteCount}
+            </span>
+
+            <span className="flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1.5 text-[9px] font-bold text-green-400">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
+              {voteSecondsLeft}s
+            </span>
+          </div>
         ) : isVoteClosed ? (
           <span className="shrink-0 rounded-full bg-yellow-500/10 px-2.5 py-1.5 text-[9px] font-bold text-yellow-300">
             CLOSED
@@ -160,73 +211,168 @@ export default function GroupStoryVote({
           <div className="rounded-lg border border-white/10 bg-[#191919] p-3">
             <div className="mb-3 flex items-center gap-2">
               <Vote size={15} className="text-red-400" />
-              <h3 className="text-xs font-bold text-white">
-                Start a group vote
-              </h3>
+
+              <h3 className="text-xs font-bold text-white">Voting Controls</h3>
             </div>
 
             <div className="space-y-3">
-              <label className="block">
+              {/* Voting Mode */}
+
+              <div>
                 <span className="mb-1.5 block text-[10px] text-white/45">
-                  Story variation
+                  Voting mode
                 </span>
 
-                <select
-                  value={selectedVariationId}
-                  onChange={(event) =>
-                    setSelectedVariationId(event.target.value)
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-[#090909] px-3 py-2.5 text-xs text-white outline-none focus:border-red-500/60"
-                >
-                  <option value="">Select a story variation</option>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVotingMode?.("manual")}
+                    disabled={voteLoading || votingSettingsLoading}
+                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-semibold transition ${
+                      !isAutomaticMode
+                        ? "border-red-500/50 bg-red-500/10 text-red-400"
+                        : "border-white/10 bg-[#090909] text-white/50 hover:border-white/20"
+                    }`}
+                  >
+                    {votingSettingsLoading ? (
+                      <LoaderCircle size={14} className="animate-spin" />
+                    ) : (
+                      <Vote size={14} />
+                    )}
+                    Manual
+                  </button>
 
-                  {variationPoints.map((point) => (
-                    <option key={point.variationId} value={point.variationId}>
-                      {point.description || point.variationId}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <button
+                    type="button"
+                    onClick={() => setVotingMode?.("automatic")}
+                    disabled={voteLoading || votingSettingsLoading}
+                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-semibold transition ${
+                      isAutomaticMode
+                        ? "border-red-500/50 bg-red-500/10 text-red-400"
+                        : "border-white/10 bg-[#090909] text-white/50 hover:border-white/20"
+                    }`}
+                  >
+                    {votingSettingsLoading ? (
+                      <LoaderCircle size={14} className="animate-spin" />
+                    ) : (
+                      <Zap size={14} />
+                    )}
+                    Automatic
+                  </button>
+                </div>
 
-              <label className="block">
-                <span className="mb-1.5 block text-[10px] text-white/45">
-                  Voting duration
-                </span>
-
-                <select
-                  value={voteDuration}
-                  onChange={(event) =>
-                    setVoteDuration(Number(event.target.value))
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-[#090909] px-3 py-2.5 text-xs text-white outline-none focus:border-red-500/60"
-                >
-                  {[15, 30, 45, 60, 90, 120].map((seconds) => (
-                    <option key={seconds} value={seconds}>
-                      {seconds} seconds
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                type="button"
-                onClick={handleStartVote}
-                disabled={voteLoading || !selectedVariationId || isVoteOpen}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {voteLoading ? (
-                  <LoaderCircle size={14} className="animate-spin" />
-                ) : (
-                  <Play size={13} fill="currentColor" />
+                {votingSettingsLoading && (
+                  <p className="mt-2 text-[10px] text-white/45" role="status">
+                    Saving voting settings...
+                  </p>
                 )}
+              </div>
 
-                {voteLoading ? "Please wait..." : "Start Vote"}
-              </button>
+              {/* Manual Mode */}
+
+              {!isAutomaticMode ? (
+                <>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] text-white/45">
+                      Story variation
+                    </span>
+
+                    <select
+                      value={selectedVariationId || ""}
+                      onChange={(event) =>
+                        setSelectedVariationId?.(event.target.value)
+                      }
+                      disabled={voteLoading || votingSettingsLoading}
+                      className="w-full rounded-lg border border-white/10 bg-[#090909] px-3 py-2.5 text-xs text-white outline-none focus:border-red-500/60"
+                    >
+                      <option value="">Select a story variation</option>
+
+                      {safeVariationPoints.map((point) => (
+                        <option
+                          key={point.variationId}
+                          value={point.variationId}
+                        >
+                          {point.text?.trim() ||
+                            point.description?.trim() ||
+                            point.variationId}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] text-white/45">
+                      Voting duration
+                    </span>
+
+                    <select
+                      value={voteDuration}
+                      onChange={(event) =>
+                        setVoteDuration?.(Number(event.target.value))
+                      }
+                      disabled={voteLoading || votingSettingsLoading}
+                      className="w-full rounded-lg border border-white/10 bg-[#090909] px-3 py-2.5 text-xs text-white outline-none focus:border-red-500/60"
+                    >
+                      {[15, 30, 45, 60, 90, 120].map((seconds) => (
+                        <option key={seconds} value={seconds}>
+                          {seconds} seconds
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleStartVote}
+                    disabled={
+                      voteLoading ||
+                      votingSettingsLoading ||
+                      !selectedVariationId ||
+                      isVoteOpen
+                    }
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {voteLoading ? (
+                      <LoaderCircle size={14} className="animate-spin" />
+                    ) : (
+                      <Play size={13} fill="currentColor" />
+                    )}
+
+                    {voteLoading ? "Please wait..." : "Start Vote"}
+                  </button>
+                </>
+              ) : (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <Zap size={14} />
+
+                    <span className="text-xs font-bold">
+                      Automatic Voting Enabled
+                    </span>
+                  </div>
+
+                  <p className="mt-2 text-[10px] leading-relaxed text-white/50">
+                    A vote will automatically start when playback reaches a
+                    pre-approved timeline variation marker.
+                  </p>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+                    <span className="text-[10px] text-white/50">
+                      Voting duration
+                    </span>
+
+                    <span className="text-xs font-bold text-white">
+                      60 seconds
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Active vote */}
+        {/* Active Vote */}
+
         {activeVote?.options?.length > 0 ? (
           <div className="space-y-3">
             <div>
@@ -251,12 +397,21 @@ export default function GroupStoryVote({
                 )}
 
               {isVoteOpen && (
-                <p className="mt-1 text-[10px] leading-relaxed text-white/40">
-                  Select an option below. You can change your vote before time
-                  runs out.
-                </p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="text-[10px] leading-relaxed text-white/40">
+                    Select an option below. You can change your vote before time
+                    runs out.
+                  </p>
+
+                  <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-white/60">
+                    <Users size={12} />
+                    {uniqueVoteCount} voted
+                  </span>
+                </div>
               )}
             </div>
+
+            {/* Voting Options */}
 
             <div className="space-y-2">
               {activeVote.options.map((option) => {
@@ -266,13 +421,15 @@ export default function GroupStoryVote({
                   activeVote.winningOptionId === option.id ||
                   voteResult?.winningOptionId === option.id;
 
-                const voteCount = activeVote.voteCounts?.[option.id];
+                const optionVoteCount =
+                  activeVote.voteCounts?.[option.id] ??
+                  voteResult?.voteCounts?.[option.id];
 
                 return (
                   <button
                     key={option.id}
                     type="button"
-                    onClick={() => handleCastVote(option.id)}
+                    onClick={() => handleCastVote?.(option.id)}
                     disabled={!isVoteOpen || voteLoading || !isParticipant}
                     className={`group w-full rounded-lg border p-3 text-left transition ${
                       isSelected
@@ -301,11 +458,12 @@ export default function GroupStoryVote({
                       )}
                     </div>
 
-                    {!isVoteOpen && (
-                      <p className="mt-2 text-[10px] text-white/40">
-                        {voteCount ?? 0} vote(s)
-                      </p>
-                    )}
+                    {(isVoteClosed || isVoteApplied) &&
+                      optionVoteCount !== undefined && (
+                        <p className="mt-2 text-[10px] text-white/40">
+                          {optionVoteCount} vote(s)
+                        </p>
+                      )}
                   </button>
                 );
               })}
@@ -326,7 +484,8 @@ export default function GroupStoryVote({
           </div>
         )}
 
-        {/* Status messages */}
+        {/* Status Messages */}
+
         {voteMessage && (
           <p
             role="status"
@@ -336,10 +495,13 @@ export default function GroupStoryVote({
           </p>
         )}
 
+        {/* Vote Result */}
+
         {voteResult?.winningOptionId && (
           <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
             <div className="flex items-center gap-2 text-green-400">
               <Trophy size={14} />
+
               <span className="text-xs font-bold">Winning option</span>
             </div>
 
@@ -356,9 +518,12 @@ export default function GroupStoryVote({
           </div>
         )}
 
+        {/* Applied Status */}
+
         {isVoteApplied && (
           <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
             <CheckCircle2 size={15} className="shrink-0 text-blue-400" />
+
             <p className="text-[10px] leading-relaxed text-blue-300">
               The selected variation has been marked as applied for this
               WatchSpace.

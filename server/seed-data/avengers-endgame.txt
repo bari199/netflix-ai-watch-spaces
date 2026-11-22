@@ -1,0 +1,861 @@
+AVENGERS: ENDGAME — READYMADE CORE TEST INPUT
+Source: nato-1.txt (subtitle timestamps supplied in this conversation)
+Purpose: Admin Title metadata + full-length timeline seed input for existing Netflix AI Watch Spaces implementation.
+IMPORTANT:
+- No new timeline categories are introduced.
+- Timeline event types below use the existing project types: scene, characterAppearance, trivia, glossary, variationPoint.
+- Voting is represented only inside variationPoint.options. There is no separate poll/vote event category.
+- Event summaries are original concise descriptions, not copied screenplay/dialogue.
+- Timestamps are grouped from subtitle cues; verify against the actual video before production use.
+- The supplied subtitle file's final cue ends at 03:04:32, while the actual video duration supplied by the user is 03:04:50 (11,090 seconds). The subtitle tail from around 02:56 onward appears to contain TVA/multiverse material that may not belong to the standard Avengers: Endgame cut. Verify that section against the actual video; do not treat it as confirmed Endgame content.
+- Runtime must match the actual video file. Do not force the database duration to 03:04:32 if your video differs.
+
+============================================================
+1. TITLE METADATA
+============================================================
+
+Title name:
+Avengers: Endgame
+
+Original title:
+Avengers: Endgame
+
+Slug:
+avengers-endgame
+
+Description / synopsis:
+After the devastating events of the Infinity War, the surviving Avengers struggle with loss and the consequences of Thanos's victory. When a new opportunity emerges, they reunite to attempt an extraordinary plan involving time travel, the Infinity Stones, and a final confrontation that will decide the fate of the universe.
+
+Release date:
+2019-04-26
+
+Runtime:
+184 minutes 50 seconds (11,090 seconds; actual video duration confirmed by user)
+
+Genres:
+Action, Adventure, Science Fiction
+
+Language:
+English
+
+Content rating:
+PG-13
+
+Poster image:
+assets/titles/avengers-endgame/poster.jpg
+
+Backdrop image:
+assets/titles/avengers-endgame/backdrop.jpg
+
+Video file:
+E:\media\Avengers-Endgame.mp4
+
+Video format:
+MP4
+
+Video resolution:
+1920x1080
+
+Video duration:
+03:04:50 (actual video duration confirmed by user; 11,090 seconds)
+
+============================================================
+2. CHARACTER MASTER DATA
+============================================================
+
+Use stable character IDs in timeline characterAppearance entries.
+
+c_clint_barton | Clint Barton / Hawkeye
+c_lila_barton | Lila Barton
+c_laura_barton | Laura Barton
+c_cooper_barton | Cooper Barton
+c_nathaniel_barton | Nathaniel Barton
+c_tony_stark | Tony Stark / Iron Man
+c_pepper_potts | Pepper Potts
+c_nebula | Nebula
+c_steve_rogers | Steve Rogers / Captain America
+c_natasha_romanoff | Natasha Romanoff / Black Widow
+c_james_rhodes | James Rhodes / War Machine
+c_bruce_banner | Bruce Banner / Smart Hulk
+c_rocket | Rocket
+c_carol_danvers | Carol Danvers / Captain Marvel
+c_thanos | Thanos
+c_thor | Thor
+c_scott_lang | Scott Lang / Ant-Man
+c_stephen_strange | Stephen Strange / Doctor Strange
+c_wong | Wong
+c_t_challa | T'Challa / Black Panther
+c_sam_wilson | Sam Wilson / Falcon
+c_bucky_barnes | Bucky Barnes / Winter Soldier
+c_wanda_maximoff | Wanda Maximoff / Scarlet Witch
+c_peter_parker | Peter Parker / Spider-Man
+c_gamora | Gamora
+c_morgan_stark | Morgan Stark
+c_old_steve | Steve Rogers (elderly)
+
+============================================================
+3. TIMELINE METADATA
+============================================================
+
+Field mapping for each entry:
+eventId      = unique stable string
+eventType    = existing enum value only
+startTime    = seconds from video start
+endTime      = seconds from video start
+text         = short original event summary
+characterId  = include for characterAppearance entries
+variationId  = include for variationPoint entries
+options      = include for variationPoint entries (minimum 2 options)
+
+TIMELINE EVENTS
+(chronological; seconds are derived from the supplied subtitle timestamps and rounded to whole seconds)
+
+
+[001]
+eventId: character-001-clint
+eventType: characterAppearance
+startTime: 6
+endTime: 95
+text: Clint Barton is shown teaching archery and interacting warmly with his family.
+characterId: c_clint_barton
+
+[002]
+eventId: character-002-lila
+eventType: characterAppearance
+startTime: 6
+endTime: 40
+text: Lila practices archery with her father during the family outing.
+characterId: c_lila_barton
+
+[003]
+eventId: scene-001-barton-family
+eventType: scene
+startTime: 6
+endTime: 95
+text: Clint Barton spends a relaxed outdoor afternoon practicing archery with his children while Laura prepares food. The peaceful family moment abruptly turns into a disappearance.
+
+[004]
+eventId: trivia-001-barton
+eventType: trivia
+startTime: 6
+endTime: 95
+text: The opening family sequence establishes Clint's personal stakes before the story returns to the aftermath of the Snap.
+
+[005]
+eventId: character-003-tony
+eventType: characterAppearance
+startTime: 212
+endTime: 590
+text: Tony Stark records a personal message while stranded in deep space with Nebula.
+characterId: c_tony_stark
+
+[006]
+eventId: character-004-nebula
+eventType: characterAppearance
+startTime: 212
+endTime: 590
+text: Nebula helps Tony survive aboard the damaged spacecraft.
+characterId: c_nebula
+
+[007]
+eventId: scene-002-tony-recording
+eventType: scene
+startTime: 212
+endTime: 350
+text: Stranded in space, Tony records a message for Pepper while describing the damaged ship, dwindling supplies, and his uncertain survival.
+
+[008]
+eventId: character-005-pepper
+eventType: characterAppearance
+startTime: 260
+endTime: 350
+text: Pepper Potts is the intended recipient of Tony's recorded message.
+characterId: c_pepper_potts
+
+[009]
+eventId: trivia-002-space-survival
+eventType: trivia
+startTime: 260
+endTime: 350
+text: Tony's recording indicates that the survivors have been stranded for more than three weeks after the battle.
+
+[010]
+eventId: scene-003-rescue
+eventType: scene
+startTime: 445
+endTime: 590
+text: Tony and Nebula are found and brought back to the surviving Avengers, reuniting Tony with the team.
+
+[011]
+eventId: character-006-natasha
+eventType: characterAppearance
+startTime: 590
+endTime: 790
+text: Natasha Romanoff coordinates the surviving team's efforts and helps lead the discussion.
+characterId: c_natasha_romanoff
+
+[012]
+eventId: character-007-rhodes
+eventType: characterAppearance
+startTime: 590
+endTime: 790
+text: James Rhodes participates in the Avengers' post-Snap briefing.
+characterId: c_james_rhodes
+
+[013]
+eventId: character-008-rocket
+eventType: characterAppearance
+startTime: 590
+endTime: 790
+text: Rocket contributes information and commentary during the team's discussion.
+characterId: c_rocket
+
+[014]
+eventId: scene-004-avengers-briefing
+eventType: scene
+startTime: 590
+endTime: 790
+text: The surviving Avengers discuss the scale of the Snap, the search for Thanos, and the lack of reliable leads.
+
+[015]
+eventId: variation-004-response-to-snap
+eventType: variationPoint
+startTime: 590
+endTime: 650
+text: Watch-party discussion: After learning the scale of the Snap, what should the surviving Avengers prioritize? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-response-to-snap
+options:
+  - id: a
+    label: Search for a way to reverse the Snap
+  - id: b
+    label: Protect and rebuild the surviving world
+
+[016]
+eventId: trivia-003-snap
+eventType: trivia
+startTime: 620
+endTime: 750
+text: The surviving team reports that Thanos eliminated half of all living creatures, leaving governments and communities in crisis.
+
+[017]
+eventId: character-009-steve
+eventType: characterAppearance
+startTime: 650
+endTime: 790
+text: Steve Rogers attempts to discuss the next steps while Tony expresses anger and exhaustion.
+characterId: c_steve_rogers
+
+[018]
+eventId: scene-005-tony-steve-conflict
+eventType: scene
+startTime: 650
+endTime: 790
+text: Tony confronts Steve over the failed battle and the absence of the team members he needed. The disagreement exposes unresolved trust issues.
+
+[019]
+eventId: scene-006-nebula-location
+eventType: scene
+startTime: 790
+endTime: 930
+text: Nebula explains that Thanos has a retreat known as the Garden and helps the Avengers identify his likely location.
+
+[020]
+eventId: trivia-004-garden
+eventType: trivia
+startTime: 820
+endTime: 930
+text: Nebula's knowledge of Thanos's habits provides the team with a lead that their scans had not found.
+
+[021]
+eventId: character-010-carol
+eventType: characterAppearance
+startTime: 930
+endTime: 1080
+text: Carol Danvers joins the surviving heroes and offers to help confront Thanos.
+characterId: c_carol_danvers
+
+[022]
+eventId: character-011-bruce
+eventType: characterAppearance
+startTime: 930
+endTime: 1080
+text: Bruce Banner contributes to the team's discussion about the dangers of confronting Thanos.
+characterId: c_bruce_banner
+
+[023]
+eventId: glossary-001-infinity-stones
+eventType: glossary
+startTime: 930
+endTime: 1080
+text: Infinity Stones: six powerful cosmic objects associated with fundamental aspects of existence. The Avengers hope to use them to reverse the Snap.
+
+[024]
+eventId: scene-007-captain-marvel-plan
+eventType: scene
+startTime: 930
+endTime: 1080
+text: The team considers using the Infinity Stones to reverse the Snap. Carol Danvers supports a direct confrontation while the others weigh the risks.
+
+[025]
+eventId: character-012-thanos
+eventType: characterAppearance
+startTime: 1080
+endTime: 1260
+text: Thanos is encountered at his secluded refuge after the Snap.
+characterId: c_thanos
+
+[026]
+eventId: scene-008-garden-attack
+eventType: scene
+startTime: 1080
+endTime: 1260
+text: The Avengers reach Thanos's remote refuge and discover that he has already used the Stones again, leaving them with a devastating setback.
+
+[027]
+eventId: trivia-005-stones-destroyed
+eventType: trivia
+startTime: 1080
+endTime: 1260
+text: The team learns that the Stones have been reduced to a state that prevents the simple recovery plan they had hoped to use.
+
+[028]
+eventId: variation-005-destroyed-stones
+eventType: variationPoint
+startTime: 1080
+endTime: 1140
+text: Watch-party discussion: When the team discovers the Stones have been destroyed, what is the most sensible next step? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-destroyed-stones
+options:
+  - id: a
+    label: Investigate another way to reverse the Snap
+  - id: b
+    label: Accept the loss and focus on the survivors
+
+[029]
+eventId: character-013-thor
+eventType: characterAppearance
+startTime: 1260
+endTime: 1500
+text: Thor is shown struggling with grief and the consequences of failure.
+characterId: c_thor
+
+[030]
+eventId: character-014-natasha-later
+eventType: characterAppearance
+startTime: 1260
+endTime: 1500
+text: Natasha continues coordinating the remaining Avengers and monitoring threats.
+characterId: c_natasha_romanoff
+
+[031]
+eventId: scene-009-five-years-later
+eventType: scene
+startTime: 1260
+endTime: 1500
+text: The story moves forward several years, showing how the surviving characters have adapted to a world permanently changed by the Snap.
+
+[032]
+eventId: character-015-scott
+eventType: characterAppearance
+startTime: 1500
+endTime: 1740
+text: Scott Lang returns and explains his experience with the Quantum Realm.
+characterId: c_scott_lang
+
+[033]
+eventId: glossary-002-quantum-realm
+eventType: glossary
+startTime: 1500
+endTime: 1740
+text: Quantum Realm: a subatomic realm where the normal relationship between space and time can behave differently.
+
+[034]
+eventId: scene-010-scott-returns
+eventType: scene
+startTime: 1500
+endTime: 1740
+text: Scott Lang returns from the Quantum Realm and presents a possible route to changing the outcome of the Snap.
+
+[035]
+eventId: trivia-006-time-heist
+eventType: trivia
+startTime: 1500
+endTime: 1740
+text: The team's time-travel plan is built around retrieving the Stones from earlier points in the timeline rather than searching for the destroyed Stones in the present.
+
+[036]
+eventId: variation-006-scott-return
+eventType: variationPoint
+startTime: 1500
+endTime: 1560
+text: Watch-party discussion: Scott returns with a possible time-travel lead. How should the team respond? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-scott-return
+options:
+  - id: a
+    label: Test the Quantum Realm theory carefully
+  - id: b
+    label: Move quickly before the opportunity disappears
+
+[037]
+eventId: character-016-tony-family
+eventType: characterAppearance
+startTime: 1740
+endTime: 2400
+text: Tony considers the personal consequences of the plan and his life with Pepper and Morgan.
+characterId: c_tony_stark
+
+[038]
+eventId: character-017-morgan
+eventType: characterAppearance
+startTime: 1740
+endTime: 2400
+text: Morgan Stark appears in Tony's family life and represents what he risks by joining the mission.
+characterId: c_morgan_stark
+
+[039]
+eventId: glossary-003-time-heist
+eventType: glossary
+startTime: 1740
+endTime: 2400
+text: Time Heist: the Avengers' coordinated mission to retrieve the Infinity Stones from different moments in the past.
+
+[040]
+eventId: scene-011-time-heist-planning
+eventType: scene
+startTime: 1740
+endTime: 2400
+text: The Avengers develop a plan to travel to specific moments in the past, divide into teams, and retrieve the Infinity Stones.
+
+[041]
+eventId: variation-007-quantum-plan
+eventType: variationPoint
+startTime: 1880
+endTime: 1940
+text: Watch-party discussion: Which risk should the team focus on most while evaluating time travel? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-quantum-plan
+options:
+  - id: a
+    label: Returning to the correct time and place
+  - id: b
+    label: Avoiding changes to past events
+
+[042]
+eventId: variation-001-mission-strategy
+eventType: variationPoint
+startTime: 2400
+endTime: 2460
+text: Watch-party discussion: which mission priority seems most important before the time-heist begins? This is a non-canonical audience choice and does not change the film.
+variationId: avengers-endgame-mission-priority
+options:
+  - id: a
+    label: Prioritize retrieving the Infinity Stones
+  - id: b
+    label: Prioritize protecting the team and timeline
+
+[043]
+eventId: character-018-steve-past
+eventType: characterAppearance
+startTime: 2460
+endTime: 5100
+text: Steve Rogers participates in the time-heist mission and faces events connected to his earlier life.
+characterId: c_steve_rogers
+
+[044]
+eventId: character-019-tony-past
+eventType: characterAppearance
+startTime: 2460
+endTime: 5100
+text: Tony Stark participates in the time-heist mission and encounters people and events from his past.
+characterId: c_tony_stark
+
+[045]
+eventId: character-020-natasha-mission
+eventType: characterAppearance
+startTime: 2460
+endTime: 5100
+text: Natasha Romanoff takes part in the mission to retrieve one of the Stones.
+characterId: c_natasha_romanoff
+
+[046]
+eventId: character-021-clint-mission
+eventType: characterAppearance
+startTime: 2460
+endTime: 5100
+text: Clint Barton participates in the time-heist mission.
+characterId: c_clint_barton
+
+[047]
+eventId: glossary-004-quantum-tunnel
+eventType: glossary
+startTime: 2460
+endTime: 5100
+text: Quantum Tunnel: the technology used by the team as part of its journey into and out of the Quantum Realm.
+
+[048]
+eventId: scene-012-time-travel-missions
+eventType: scene
+startTime: 2460
+endTime: 5100
+text: The Avengers travel to earlier moments and split into teams to retrieve the Stones, encountering complications caused by their interactions with the past.
+
+[049]
+eventId: trivia-007-time-heist-rules
+eventType: trivia
+startTime: 2460
+endTime: 5100
+text: The plan depends on precise timing and coordination because the teams are operating in different historical moments.
+
+[050]
+eventId: variation-008-vormir-sacrifice
+eventType: variationPoint
+startTime: 3860
+endTime: 3920
+text: Watch-party discussion: The Soul Stone requires a terrible sacrifice. What should the team do when facing that cost? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-vormir-sacrifice
+options:
+  - id: a
+    label: Continue the mission despite the sacrifice
+  - id: b
+    label: Search for another possible path
+
+[051]
+eventId: scene-013-return-and-loss
+eventType: scene
+startTime: 5100
+endTime: 5700
+text: The teams return from their missions, but the cost of obtaining the Stones becomes clear and the Avengers face a personal loss.
+
+[052]
+eventId: trivia-008-sacrifice
+eventType: trivia
+startTime: 5100
+endTime: 5700
+text: The mission demonstrates that the Infinity Stones cannot be obtained without consequences for the people involved.
+
+[053]
+eventId: variation-009-return-cost
+eventType: variationPoint
+startTime: 5100
+endTime: 5160
+text: Watch-party discussion: After the time-heist teams return with a heavy personal loss, what should the team prioritize? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-return-cost
+options:
+  - id: a
+    label: Honor the sacrifice and continue the mission
+  - id: b
+    label: Pause to reassess the plan and its risks
+
+[054]
+eventId: character-022-bruce-hulk
+eventType: characterAppearance
+startTime: 5700
+endTime: 6600
+text: Bruce Banner takes responsibility for using the Stones because of his ability to withstand gamma radiation.
+characterId: c_bruce_banner
+
+[055]
+eventId: glossary-005-gauntlet
+eventType: glossary
+startTime: 5700
+endTime: 6600
+text: Infinity Gauntlet: a device designed to hold and channel the power of the Infinity Stones.
+
+[056]
+eventId: scene-014-gauntlet-plan
+eventType: scene
+startTime: 5700
+endTime: 6600
+text: The surviving heroes prepare a device capable of channeling the Stones and discuss who can safely use it to reverse the Snap.
+
+[057]
+eventId: scene-015-snap-reversed
+eventType: scene
+startTime: 6600
+endTime: 7200
+text: The Avengers attempt to restore everyone erased by the Snap, while the team prepares for the possibility that Thanos may return.
+
+[058]
+eventId: trivia-009-restoration
+eventType: trivia
+startTime: 6600
+endTime: 7200
+text: The restored population returns to the present, but the consequences of the time-heist are not over.
+
+[059]
+eventId: variation-010-reversal
+eventType: variationPoint
+startTime: 6600
+endTime: 6660
+text: Watch-party discussion: Once the gauntlet is ready, what should matter most during the attempt to reverse the Snap? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-snap-reversal
+options:
+  - id: a
+    label: Restore everyone as quickly as possible
+  - id: b
+    label: Ensure the user of the gauntlet survives
+
+[060]
+eventId: character-023-thanos-battle
+eventType: characterAppearance
+startTime: 7200
+endTime: 7800
+text: Thanos leads his forces in the final confrontation with the Avengers.
+characterId: c_thanos
+
+[061]
+eventId: character-024-steve-battle
+eventType: characterAppearance
+startTime: 7200
+endTime: 9000
+text: Steve Rogers leads and fights alongside the heroes during the final battle.
+characterId: c_steve_rogers
+
+[062]
+eventId: character-025-thor-battle
+eventType: characterAppearance
+startTime: 7200
+endTime: 9000
+text: Thor joins the final battle against Thanos.
+characterId: c_thor
+
+[063]
+eventId: scene-016-thanos-arrives
+eventType: scene
+startTime: 7200
+endTime: 7800
+text: The Avengers' compound is attacked and the conflict escalates into a large-scale battle against Thanos's forces.
+
+[064]
+eventId: variation-011-final-battle
+eventType: variationPoint
+startTime: 7200
+endTime: 7260
+text: Watch-party discussion: As Thanos attacks, which defensive priority would you choose? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-final-battle
+options:
+  - id: a
+    label: Protect the team and the gauntlet
+  - id: b
+    label: Confront Thanos and disrupt his forces
+
+[065]
+eventId: trivia-010-avengers-assemble
+eventType: trivia
+startTime: 7800
+endTime: 9000
+text: The final battle brings together heroes from across the Marvel Cinematic Universe to oppose Thanos's forces.
+
+[066]
+eventId: variation-002-battle-choice
+eventType: variationPoint
+startTime: 7800
+endTime: 7860
+text: Watch-party discussion: which team strategy would you choose during the final battle? This is a non-canonical audience vote and does not alter the movie.
+variationId: avengers-endgame-battle-strategy
+options:
+  - id: a
+    label: Protect the gauntlet and keep it moving
+  - id: b
+    label: Focus on stopping Thanos directly
+
+[067]
+eventId: variation-012-portals
+eventType: variationPoint
+startTime: 8175
+endTime: 8235
+text: Watch-party discussion: When reinforcements arrive through the portals, what should the heroes focus on first? This is an audience-only poll and does not alter the canonical film.
+variationId: avengers-endgame-portals
+options:
+  - id: a
+    label: Regroup and coordinate the united forces
+  - id: b
+    label: Immediately push toward Thanos
+
+[068]
+eventId: character-026-tony-final
+eventType: characterAppearance
+startTime: 9000
+endTime: 9600
+text: Tony Stark makes the decisive sacrifice that defeats Thanos and his forces.
+characterId: c_tony_stark
+
+[069]
+eventId: scene-017-final-sacrifice
+eventType: scene
+startTime: 9000
+endTime: 9600
+text: The final confrontation reaches its decisive moment, and Tony makes a choice that determines the outcome of the battle.
+
+[070]
+eventId: trivia-011-tony-sacrifice
+eventType: trivia
+startTime: 9000
+endTime: 9600
+text: Tony's final action completes the character arc that began with his transformation from a weapons manufacturer into a hero who protects others.
+
+[071]
+eventId: character-027-pepper-farewell
+eventType: characterAppearance
+startTime: 9600
+endTime: 10200
+text: Pepper Potts and the people closest to Tony say goodbye after his sacrifice.
+characterId: c_pepper_potts
+
+[072]
+eventId: scene-018-farewell
+eventType: scene
+startTime: 9600
+endTime: 10200
+text: The heroes mourn Tony and gather for a personal farewell after the battle.
+
+[073]
+eventId: scene-019-stones-return
+eventType: scene
+startTime: 10200
+endTime: 10500
+text: Steve Rogers undertakes the task of returning the Stones to their proper points in time.
+
+[074]
+eventId: character-028-old-steve
+eventType: characterAppearance
+startTime: 10500
+endTime: 10800
+text: An older Steve Rogers appears after completing his journey, bringing his story to a quiet conclusion.
+characterId: c_old_steve
+
+[075]
+eventId: character-029-sam
+eventType: characterAppearance
+startTime: 10500
+endTime: 10900
+text: Sam Wilson receives the shield from Steve Rogers.
+characterId: c_sam_wilson
+
+[076]
+eventId: scene-020-shield-passing
+eventType: scene
+startTime: 10500
+endTime: 10900
+text: Steve passes his shield to Sam Wilson, signaling a new chapter for the legacy of Captain America.
+
+[077]
+eventId: trivia-012-next-generation
+eventType: trivia
+startTime: 10500
+endTime: 10900
+text: Passing the shield to Sam points toward the next chapter of the Captain America legacy.
+
+[078]
+eventId: variation-003-shield-vote
+eventType: variationPoint
+startTime: 10500
+endTime: 10560
+text: Watch-party discussion: who should carry the shield next? This is an audience poll only; the canonical scene remains unchanged.
+variationId: avengers-endgame-shield-choice
+options:
+  - id: a
+    label: Sam Wilson
+  - id: b
+    label: Bucky Barnes
+
+SOURCE VALIDATION NOTE (NOT A TIMELINE EVENT)
+The supplied subtitle file's final cue ends at 03:04:32; the actual video duration is 03:04:50 (11,090 seconds), as confirmed by the user. Its late section includes TVA/multiverse material that appears inconsistent with the standard Avengers: Endgame cut. Verify the actual video before importing any metadata after the shield-passing/farewell sequence. Do not create timeline events from this suspicious subtitle tail unless it is present in your video.
+
+============================================================
+4. VOTING / VARIATION POINT SUMMARY
+============================================================
+
+Voting is attached to existing variationPoint events only. All polls below are audience discussion prompts; they do not branch, rewrite, or alter the canonical movie.
+
+variation-001-mission-strategy (00:40:00)
+Question: Which mission priority seems most important before the time-heist begins?
+Options:
+a. Prioritize retrieving the Infinity Stones
+b. Prioritize protecting the team and timeline
+
+variation-004-response-to-snap (00:09:50)
+Question: After learning the scale of the Snap, what should the surviving Avengers prioritize?
+Options:
+a. Search for a way to reverse the Snap
+b. Protect and rebuild the surviving world
+
+variation-005-destroyed-stones (00:18:00)
+Question: When the team discovers the Stones have been destroyed, what is the most sensible next step?
+Options:
+a. Investigate another way to reverse the Snap
+b. Accept the loss and focus on the survivors
+
+variation-006-scott-return (00:25:00)
+Question: Scott returns with a possible time-travel lead. How should the team respond?
+Options:
+a. Test the Quantum Realm theory carefully
+b. Move quickly before the opportunity disappears
+
+variation-007-quantum-plan (00:31:20)
+Question: Which risk should the team focus on most while evaluating time travel?
+Options:
+a. Returning to the correct time and place
+b. Avoiding changes to past events
+
+variation-008-vormir-sacrifice (01:04:20)
+Question: The Soul Stone requires a terrible sacrifice. What should the team do when facing that cost?
+Options:
+a. Continue the mission despite the sacrifice
+b. Search for another possible path
+
+variation-009-return-cost (01:25:00)
+Question: After the time-heist teams return with a heavy personal loss, what should the team prioritize?
+Options:
+a. Honor the sacrifice and continue the mission
+b. Pause to reassess the plan and its risks
+
+variation-010-reversal (01:50:00)
+Question: Once the gauntlet is ready, what should matter most during the attempt to reverse the Snap?
+Options:
+a. Restore everyone as quickly as possible
+b. Ensure the user of the gauntlet survives
+
+variation-011-final-battle (02:00:00)
+Question: As Thanos attacks, which defensive priority would you choose?
+Options:
+a. Protect the team and the gauntlet
+b. Confront Thanos and disrupt his forces
+
+variation-002-battle-choice (02:10:00)
+Question: Which team strategy would you choose during the final battle?
+Options:
+a. Protect the gauntlet and keep it moving
+b. Focus on stopping Thanos directly
+
+variation-012-portals (02:16:15)
+Question: When reinforcements arrive through the portals, what should the heroes focus on first?
+Options:
+a. Regroup and coordinate the united forces
+b. Immediately push toward Thanos
+
+variation-003-shield-vote (02:55:00)
+Question: Who should carry the shield next?
+Options:
+a. Sam Wilson
+b. Bucky Barnes
+
+All voting entries use the existing variationPoint/options fields. They are not new event categories and do not represent actual alternate movie scenes.
+
+============================================================
+5. IMPORT / VALIDATION NOTES
+============================================================
+
+1. Title duration is set to the user-confirmed actual video duration: 03:04:50 (11,090 seconds). Confirm locally with the media file before import.
+2. Confirm all event endTime values are less than or equal to Title duration.
+3. Every eventId must be unique.
+4. Every characterAppearance event must reference a valid characterId.
+5. Every variationPoint must have a unique variationId and at least two unique options with labels.
+6. Use only eventType values accepted by the current Mongoose schema. If the schema spells a type differently (for example character vs characterAppearance), map to the exact enum already in code; do not edit the schema.
+7. Check the event range around 02:56:00–03:04:50 against the actual video. The supplied subtitle tail appears inconsistent with the standard Endgame cut.
+8. Poster/backdrop/video paths above are sample local paths. Replace them with the actual files on your machine.
+9. The timeline entries are a curated test dataset, not a verbatim transcript or complete shot-by-shot annotation. The nine additional audience polls are anchored to relevant subtitle moments; review them against the actual video before importing.
+10. Keep subtitle WebVTT tracks as separate files and upload them through the existing subtitle-variant flow; do not paste full movie dialogue into timeline text.
+
+Duration boundary: 11,090 seconds (03:04:50). The final subtitle cue ends at 11,072 seconds (03:04:32), leaving 18 seconds without subtitle text; this is not a reason to shorten the video duration.
+
+END OF INPUT

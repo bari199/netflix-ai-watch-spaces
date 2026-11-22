@@ -3,11 +3,18 @@ import User from "../models/User.js";
 import minioClient, { MINIO_BUCKET } from "../config/minio.js";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 
-// Update user profile
-export const updateUserProfile = async (userId, { name }) => {
+// Update user profile and notification preferences
+export const updateUserProfile = async (
+  userId,
+  { name, notificationPreferences } = {},
+) => {
   const updates = {};
 
   if (name !== undefined) {
+    if (typeof name !== "string") {
+      throw new Error("Name must be a string");
+    }
+
     const normalizedName = name.trim();
 
     if (!normalizedName) {
@@ -15,6 +22,34 @@ export const updateUserProfile = async (userId, { name }) => {
     }
 
     updates.name = normalizedName;
+  }
+
+  if (notificationPreferences !== undefined) {
+    if (
+      !notificationPreferences ||
+      typeof notificationPreferences !== "object" ||
+      Array.isArray(notificationPreferences)
+    ) {
+      throw new Error("Invalid notification preferences");
+    }
+
+    const allowedKeys = ["soundEnabled", "vibrationEnabled"];
+    const providedKeys = Object.keys(notificationPreferences);
+
+    if (
+      providedKeys.length === 0 ||
+      providedKeys.some((key) => !allowedKeys.includes(key))
+    ) {
+      throw new Error("Invalid notification preference fields");
+    }
+
+    for (const key of providedKeys) {
+      if (typeof notificationPreferences[key] !== "boolean") {
+        throw new Error(`${key} must be a boolean`);
+      }
+
+      updates[`notificationPreferences.${key}`] = notificationPreferences[key];
+    }
   }
 
   if (Object.keys(updates).length === 0) {
@@ -28,7 +63,9 @@ export const updateUserProfile = async (userId, { name }) => {
       returnDocument: "after",
       runValidators: true,
     },
-  ).select("_id name email avatar role isEmailVerified authProvider");
+  ).select(
+    "_id name email avatar role isEmailVerified authProvider notificationPreferences",
+  );
 
   if (!user) {
     throw new Error("User not found");
@@ -73,7 +110,9 @@ export const uploadUserAvatar = async (userId, file) => {
       returnDocument: "after",
       runValidators: true,
     },
-  ).select("_id name email avatar role isEmailVerified authProvider");
+  ).select(
+    "_id name email avatar role isEmailVerified authProvider notificationPreferences",
+  );
 
   if (!user) {
     throw new Error("User not found");
