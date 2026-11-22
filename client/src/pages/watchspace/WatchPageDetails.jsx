@@ -32,6 +32,7 @@ import TriviaNotification from "../../components/watchspace/common/TriviaNotific
 import ErrorAlert from "../../components/watchspace/common/ErrorAlert.jsx";
 import HostDisconnectedAlert from "../../components/watchspace/common/HostDisconnectedAlert.jsx";
 import LoadingScreen from "../../components/watchspace/common/LoadingScreen.jsx";
+import { playWatchSpaceFeedback } from "../../utils/watchSpaceFeedback.js";
 
 // Configure VITE_API_BASE_URL in the frontend .env file.
 // The relative fallback avoids hardcoding a local development host.
@@ -817,6 +818,7 @@ const WatchPageDetails = () => {
       });
       setSelectedVoteOption("");
       setVoteResult(null);
+      playWatchSpaceFeedback();
       setVoteMessage("A new group vote has started.");
     };
 
@@ -842,6 +844,7 @@ const WatchPageDetails = () => {
       });
 
       setVoteResult(data);
+      playWatchSpaceFeedback();
       setVoteMessage("Voting has ended. The group result is ready.");
     };
 
@@ -866,6 +869,7 @@ const WatchPageDetails = () => {
         };
       });
 
+      playWatchSpaceFeedback();
       setVoteMessage("The selected variation has been applied.");
     };
 
