@@ -33,7 +33,10 @@ import TriviaNotification from "../../components/watchspace/common/TriviaNotific
 import ErrorAlert from "../../components/watchspace/common/ErrorAlert.jsx";
 import HostDisconnectedAlert from "../../components/watchspace/common/HostDisconnectedAlert.jsx";
 import LoadingScreen from "../../components/watchspace/common/LoadingScreen.jsx";
-import { playWatchSpaceFeedback } from "../../utils/watchSpaceFeedback.js";
+import {
+  playWatchSpaceFeedback,
+  unlockWatchSpaceAudio,
+} from "../../utils/watchSpaceFeedback.js";
 
 // Configure VITE_API_BASE_URL in the frontend .env file.
 // The relative fallback avoids hardcoding a local development host.
@@ -141,6 +144,26 @@ const WatchPageDetails = () => {
       }
     }
   }, [watchSpaceId]);
+
+  useEffect(() => {
+    const unlockAudio = () => unlockWatchSpaceAudio();
+
+    // Browsers block Web Audio until a user gesture. Unlock it once while
+    // the participant interacts with the WatchSpace, before a poll arrives.
+    window.addEventListener("pointerdown", unlockAudio, {
+      once: true,
+      capture: true,
+    });
+    window.addEventListener("keydown", unlockAudio, {
+      once: true,
+      capture: true,
+    });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+  }, []);
 
   useEffect(() => {
     // Invalidate any request started for the previous route.
