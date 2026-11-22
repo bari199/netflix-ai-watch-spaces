@@ -995,8 +995,8 @@ const WatchPageDetails = () => {
     currentUserId,
   ]);
 
-  // The Hero is rendered before the video element exists. Mount the player
-  // first, then attempt playback as soon as the browser reports it can play.
+  // The Hero is rendered before the video element exists. Wait until the
+  // player is mounted, then start the media as soon as it can play.
   useEffect(() => {
     if (!startPlayerOnMount || !playerStarted) return undefined;
 
