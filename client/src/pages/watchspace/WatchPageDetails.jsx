@@ -355,13 +355,22 @@ const WatchPageDetails = () => {
     const video = videoRef.current;
     if (!video) return;
 
-    Array.from(video.textTracks).forEach((track, index) => {
-      track.mode =
-        subtitleVariants[index]?.variantId === selectedSubtitle?.variantId
-          ? "showing"
-          : "disabled";
-    });
-  }, [subtitleVariants, selectedSubtitle?.variantId]);
+    const updateSubtitleTracks = () => {
+      Array.from(video.textTracks).forEach((track) => {
+        track.mode =
+          selectedSubtitle && track.label === selectedSubtitle.label
+            ? "showing"
+            : "disabled";
+      });
+    };
+
+    updateSubtitleTracks();
+    video.textTracks.addEventListener?.("addtrack", updateSubtitleTracks);
+
+    return () => {
+      video.textTracks.removeEventListener?.("addtrack", updateSubtitleTracks);
+    };
+  }, [subtitleVariants, selectedSubtitle?.variantId, selectedSubtitle?.label]);
 
   // Socket Connection, Chat, Presence and Playback Sync
   useEffect(() => {
@@ -398,6 +407,51 @@ const WatchPageDetails = () => {
         roomJoined = true;
 
         console.log("WatchSpace room joined:", response);
+
+        // Restore the latest server playback snapshot when the room reconnects.
+        const playback = response.playback;
+        if (playback && Number.isFinite(Number(playback.positionSeconds))) {
+          const restoredPosition = Math.max(0, Number(playback.positionSeconds));
+          const restoredState = playback.state || "paused";
+
+          setWatchSpace((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  playback: {
+                    ...previous.playback,
+                    ...playback,
+                    positionSeconds: restoredPosition,
+                    state: restoredState,
+                  },
+                }
+              : previous,
+          );
+
+          const restoreVideo = () => {
+            const video = videoRef.current;
+            if (!video || video.readyState < 1) return;
+
+            applyingRemoteUpdateRef.current = true;
+            if (Math.abs(video.currentTime - restoredPosition) > 0.5) {
+              video.currentTime = restoredPosition;
+            }
+
+            if (restoredState === "playing") {
+              video.play().catch((playError) => {
+                console.warn("Playback resume requires a user gesture:", playError?.message);
+              });
+            } else {
+              video.pause();
+            }
+
+            requestAnimationFrame(() => {
+              applyingRemoteUpdateRef.current = false;
+            });
+          };
+
+          restoreVideo();
+        }
 
         socket.emit("presence.join", { watchSpaceId }, (presenceResponse) => {
           if (!active) return;
@@ -997,7 +1051,9 @@ const WatchPageDetails = () => {
       const payload = {
         watchSpaceId,
         action,
-        positionSeconds: video.currentTime,
+        positionSeconds: Number.isFinite(video.currentTime)
+          ? video.currentTime
+          : playbackPosition,
       };
 
       socket.emit("playback.control", payload, (response) => {
@@ -1333,8 +1389,12 @@ const WatchPageDetails = () => {
     watchSpace.host?.name || watchSpace.host?.fullName || "Unknown";
 
   const currentPlaybackState = watchSpace.playback?.state || "paused";
+  // Keep the movie player mounted after it has been entered, including paused state.
   const isPlayerVisible =
-    playerStarted || currentPlaybackState === "playing" || playbackPosition > 0;
+    playerStarted ||
+    currentPlaybackState === "playing" ||
+    playbackPosition > 0 ||
+    currentPlaybackState === "paused";
 
   const variationPoints = Array.isArray(title?.timeline)
     ? title.timeline.filter(
@@ -1405,15 +1465,6 @@ const WatchPageDetails = () => {
                     isHost
                       ? () => {
                           setPlayerStarted(true);
-                          requestAnimationFrame(() => {
-                            const video = videoRef.current;
-                            video?.play().catch((playError) => {
-                              console.error(
-                                "Video playback failed:",
-                                playError,
-                              );
-                            });
-                          });
                         }
                       : undefined
                   }
