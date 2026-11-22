@@ -174,6 +174,7 @@ const WatchPageDetails = () => {
     setSubtitleSelection(null);
     setPlayerStarted(false);
     setActiveSidebarTab("chat");
+    activeSidebarTabRef.current = "chat";
 
     seenTriviaEventIdsRef.current.clear();
   }, [watchSpaceId]);
