@@ -266,6 +266,13 @@ export const setPlaybackMode = async (watchSpaceId, hostId, mode) => {
     throw new Error("This WatchSpace has already ended");
   }
 
+  if (
+    watchSpace.activeVote &&
+    ["open", "closed"].includes(watchSpace.activeVote.status)
+  ) {
+    throw new Error("Finish the current story vote before changing mode");
+  }
+
   watchSpace.playbackMode = mode;
   await watchSpace.save();
 
