@@ -50,6 +50,7 @@ export default function CinematicPlayer({
   onPause,
   onSeeked,
   playbackMode = "manual",
+  pendingHeroStart = false,
 }) {
   const containerRef = useRef(null);
   const hideControlsTimer = useRef(null);
@@ -73,6 +74,7 @@ export default function CinematicPlayer({
   const displayTitle = title?.name || title?.title || title || "Now Playing";
 
   const canControlPlayback = isHost && playbackMode === "manual";
+  const canStartFromHero = isHost && pendingHeroStart;
 
   const clearControlsTimer = () => {
     if (hideControlsTimer.current) {
@@ -361,7 +363,15 @@ export default function CinematicPlayer({
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onSeeked={onSeeked}
-          onClick={togglePlay}
+          onClick={() => {
+            if (canStartFromHero && videoRef.current?.paused) {
+              videoRef.current.play().catch((error) => {
+                console.error("Video playback failed:", error);
+              });
+              return;
+            }
+            togglePlay();
+          }}
           className="h-full w-full bg-black object-contain"
         >
           {subtitleVariants.map((variant) => (
