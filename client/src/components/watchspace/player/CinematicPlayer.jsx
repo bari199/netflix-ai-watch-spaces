@@ -134,6 +134,40 @@ export default function CinematicPlayer({
     setCurrentTime(nextTime);
   };
 
+  useEffect(() => {
+    const video = videoRef?.current;
+
+    if (!video) return;
+
+    const syncMediaState = () => {
+      setIsPlaying(!video.paused && !video.ended);
+      setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
+      setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+      setVolume(video.volume);
+      setIsMuted(video.muted);
+      setPlaybackRate(video.playbackRate || 1);
+    };
+
+    syncMediaState();
+    video.addEventListener("loadedmetadata", syncMediaState);
+    video.addEventListener("durationchange", syncMediaState);
+    video.addEventListener("timeupdate", syncMediaState);
+    video.addEventListener("volumechange", syncMediaState);
+    video.addEventListener("ratechange", syncMediaState);
+    video.addEventListener("play", syncMediaState);
+    video.addEventListener("pause", syncMediaState);
+
+    return () => {
+      video.removeEventListener("loadedmetadata", syncMediaState);
+      video.removeEventListener("durationchange", syncMediaState);
+      video.removeEventListener("timeupdate", syncMediaState);
+      video.removeEventListener("volumechange", syncMediaState);
+      video.removeEventListener("ratechange", syncMediaState);
+      video.removeEventListener("play", syncMediaState);
+      video.removeEventListener("pause", syncMediaState);
+    };
+  }, [videoRef, videoUrl]);
+
   const handleVolumeChange = (event) => {
     const nextVolume = Number(event.target.value);
     const video = videoRef?.current;
@@ -537,8 +571,7 @@ export default function CinematicPlayer({
 
                 {/* Right controls */}
                 <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-                  {subtitleVariants.length > 0 && (
-                    <div className="relative">
+                  <div className="relative">
                       <button
                         type="button"
                         onClick={() => setShowSettings((value) => !value)}
@@ -623,8 +656,7 @@ export default function CinematicPlayer({
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
-                  )}
+                  </div>
 
                   <button
                     type="button"
