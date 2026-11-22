@@ -78,6 +78,16 @@ const activeVoteSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    eventId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    mode: {
+      type: String,
+      enum: ["manual", "automatic"],
+      default: "manual",
+    },
     options: [
       {
         id: {
@@ -174,6 +184,10 @@ const watchSpaceSchema = new mongoose.Schema(
       default: true,
     },
     triggeredTriviaEventIds: {
+      type: [String],
+      default: [],
+    },
+    triggeredVariationEventIds: {
       type: [String],
       default: [],
     },
