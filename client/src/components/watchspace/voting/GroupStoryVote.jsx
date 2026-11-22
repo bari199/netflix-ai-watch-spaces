@@ -230,13 +230,25 @@ export default function GroupStoryVote({
         {activeVote?.options?.length > 0 ? (
           <div className="space-y-3">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                Current variation
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-red-300">
+                {isVoteOpen ? "Voting question" : "Story question"}
               </p>
 
-              <p className="mt-1 text-xs font-semibold text-white/85">
-                {selectedVariation?.description?.trim() || "Story variation"}
+              <p className="mt-1 text-sm font-semibold leading-relaxed text-white">
+                {activeVote.question?.trim() ||
+                  selectedVariation?.question?.trim() ||
+                  selectedVariation?.text?.trim() ||
+                  selectedVariation?.description?.trim() ||
+                  "What should happen next?"}
               </p>
+
+              {selectedVariation?.description?.trim() &&
+                activeVote.question?.trim() &&
+                selectedVariation.description.trim() !== activeVote.question.trim() && (
+                  <p className="mt-1 text-[10px] text-white/40">
+                    {selectedVariation.description.trim()}
+                  </p>
+                )}
 
               {isVoteOpen && (
                 <p className="mt-1 text-[10px] leading-relaxed text-white/40">
