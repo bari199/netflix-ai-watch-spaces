@@ -842,6 +842,7 @@ const WatchPageDetails = () => {
 
       setActiveVote({
         variationId: data.variationId,
+        question: data.question || "",
         eventId: data.eventId || null,
         mode: data.mode || "manual",
         options: data.options || [],
