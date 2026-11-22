@@ -843,10 +843,10 @@ const WatchPageDetails = () => {
       setActiveVote({
         variationId: data.variationId,
         eventId: data.eventId || null,
-        mode: data.mode || watchSpace?.playbackMode || "manual",
+        mode: data.mode || "manual",
         options: data.options || [],
         status: "open",
-        durationSeconds: data.durationSeconds || 60,
+        durationSeconds: data.durationSeconds || 30,
         closesAt: data.closesAt,
       });
       if (activeSidebarTabRef.current !== "vote") {
