@@ -68,6 +68,12 @@ const closeVote = async (io, watchSpaceId) => {
     vote.status = "closed";
     vote.winningOptionId = winningOptionId;
 
+    // Automatic polls apply the winning branch at the playback position
+    // reached when the 60-second voting window closes.
+    if (vote.mode === "automatic") {
+      vote.applyAtSeconds = Number(watchSpace.playback?.positionSeconds) || 0;
+    }
+
     await watchSpace.save();
 
     const roomName = getRoomName(watchSpaceId);
@@ -78,6 +84,7 @@ const closeVote = async (io, watchSpaceId) => {
       voteCounts,
       winningOptionId,
       applyAtSeconds: vote.applyAtSeconds,
+      mode: vote.mode || "manual",
     });
 
   } catch (error) {
@@ -90,6 +97,157 @@ const closeVote = async (io, watchSpaceId) => {
       activeVoteTimers.delete(watchSpaceId);
     }
   }
+};
+
+const scheduleVoteClose = (io, watchSpaceId, durationSeconds) => {
+  const key = watchSpaceId.toString();
+  const previousTimer = activeVoteTimers.get(key);
+  if (previousTimer) clearTimeout(previousTimer);
+
+  const timer = setTimeout(() => {
+    closeVote(io, key);
+  }, durationSeconds * 1000);
+
+  timer.unref?.();
+  activeVoteTimers.set(key, timer);
+};
+
+// Start an automatic poll once the host's playback position crosses a
+// pre-authored variation marker. The database update prevents duplicate polls.
+export const triggerDueAutomaticVariationVote = async (
+  io,
+  watchSpaceId,
+  previousPosition,
+  currentPosition,
+  watchSpaceOverride,
+) => {
+  if (!mongoose.isValidObjectId(String(watchSpaceId))) return false;
+  if (!Number.isFinite(previousPosition) || !Number.isFinite(currentPosition)) {
+    return false;
+  }
+  if (currentPosition <= previousPosition) return false;
+
+  const targetId = String(watchSpaceId);
+  const watchSpace =
+    watchSpaceOverride ||
+    (await WatchSpace.findById(targetId).populate("title", "timeline"));
+
+  if (
+    !watchSpace ||
+    watchSpace.status !== "active" ||
+    watchSpace.playback?.state !== "playing" ||
+    watchSpace.playbackMode !== "automatic" ||
+    !watchSpace.votingEnabled ||
+    (watchSpace.activeVote &&
+      ["open", "closed"].includes(watchSpace.activeVote.status))
+  ) {
+    return false;
+  }
+
+  const titleRecord = Array.isArray(watchSpace.title?.timeline)
+    ? watchSpace.title
+    : await Title.findById(watchSpace.title?._id || watchSpace.title).select(
+        "timeline",
+      );
+  const timeline = Array.isArray(titleRecord?.timeline)
+    ? titleRecord.timeline
+    : [];
+
+  const triggeredIds = new Set(watchSpace.triggeredVariationEventIds || []);
+  const dueEvent = timeline.find((event) => {
+    const startTime = Number(event?.startTime);
+    return (
+      event?.eventType === "variationPoint" &&
+      typeof event.eventId === "string" &&
+      event.eventId.trim() &&
+      typeof event.variationId === "string" &&
+      event.variationId.trim() &&
+      Number.isFinite(startTime) &&
+      startTime >= 0 &&
+      previousPosition < startTime &&
+      currentPosition >= startTime &&
+      !triggeredIds.has(event.eventId) &&
+      Array.isArray(event.options) &&
+      event.options.length >= 2
+    );
+  });
+
+  if (!dueEvent) return false;
+
+  const durationSeconds = 60;
+  const closesAt = new Date(Date.now() + durationSeconds * 1000);
+  const options = dueEvent.options.map((option) => ({
+    id: option.id,
+    label: option.label,
+  }));
+
+  const activeVote = {
+    variationId: dueEvent.variationId,
+    eventId: dueEvent.eventId,
+    mode: "automatic",
+    options,
+    status: "open",
+    durationSeconds,
+    closesAt,
+    applyAtSeconds: Number(dueEvent.startTime),
+    votes: [],
+    winningOptionId: null,
+    appliedAt: null,
+    triggeredBy: watchSpace.host,
+  };
+
+  const claimedWatchSpace = await WatchSpace.findOneAndUpdate(
+    {
+      _id: targetId,
+      status: "active",
+      playbackMode: "automatic",
+      votingEnabled: true,
+      triggeredVariationEventIds: { $ne: dueEvent.eventId },
+      $or: [
+        { activeVote: null },
+        { "activeVote.status": "applied" },
+      ],
+    },
+    {
+      $set: { activeVote },
+      $addToSet: { triggeredVariationEventIds: dueEvent.eventId },
+    },
+    { new: true },
+  );
+
+  if (!claimedWatchSpace) return false;
+
+  io.to(getRoomName(targetId)).emit("room.variation.voteOpen", {
+    watchSpaceId: targetId,
+    variationId: dueEvent.variationId,
+    eventId: dueEvent.eventId,
+    options,
+    closesAt,
+    mode: "automatic",
+  });
+
+  scheduleVoteClose(io, targetId, durationSeconds);
+  return true;
+};
+
+// A process restart clears in-memory timers. The next host playback report
+// closes an expired automatic poll using its persisted closesAt timestamp.
+export const closeExpiredAutomaticVote = async (io, watchSpaceId) => {
+  const watchSpace = await WatchSpace.findById(watchSpaceId).select(
+    "activeVote",
+  );
+  const vote = watchSpace?.activeVote;
+
+  if (
+    vote?.mode === "automatic" &&
+    vote.status === "open" &&
+    new Date(vote.closesAt).getTime() <= Date.now()
+  ) {
+    await closeVote(io, watchSpaceId.toString());
+    return true;
+  }
+
+  return false;
 };
 
 const registerVariationHandlers = (io, socket) => {
@@ -215,6 +373,7 @@ const registerVariationHandlers = (io, socket) => {
 
       watchSpace.activeVote = {
         variationId,
+        mode: "manual",
         options,
         status: "open",
         durationSeconds,
@@ -246,16 +405,8 @@ const registerVariationHandlers = (io, socket) => {
         });
       }
 
-      // Automatically close the vote after its configured duration
-      const previousTimer = activeVoteTimers.get(watchSpaceId);
-
-      if (previousTimer) clearTimeout(previousTimer);
-
-      const timer = setTimeout(() => {
-        closeVote(io, watchSpaceId);
-      }, durationSeconds * 1000);
-
-      activeVoteTimers.set(watchSpaceId, timer);
+      // Automatically close the vote after its configured duration.
+      scheduleVoteClose(io, watchSpaceId, durationSeconds);
     } catch (error) {
       console.error("Variation vote start error:", error);
       sendError(callback, "Failed to start variation vote.");
