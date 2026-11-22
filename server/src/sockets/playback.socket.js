@@ -2,6 +2,10 @@ import mongoose from "mongoose";
 import Title from "../models/Title.js";
 import WatchSpace from "../models/WatchSpace.js";
 import { recordPlaybackProgress } from "../services/interaction.service.js";
+import {
+  closeExpiredAutomaticVote,
+  triggerDueAutomaticVariationVote,
+} from "./variation.socket.js";
 
 // Playback synchronization configuration
 const DRIFT_THRESHOLD_SECONDS = 0.25;
@@ -679,6 +683,17 @@ const registerPlaybackHandlers = (io, socket) => {
           io,
           watchSpaceId,
           previousPlaybackPosition,
+          positionSeconds,
+          watchSpace,
+        );
+
+        // Automatic story voting is server-authoritative and starts only
+        // when the host's playing timeline crosses a variation marker.
+        await closeExpiredAutomaticVote(io, watchSpaceId.toString());
+        await triggerDueAutomaticVariationVote(
+          io,
+          watchSpaceId.toString(),
+          previousHostPosition,
           positionSeconds,
           watchSpace,
         );
