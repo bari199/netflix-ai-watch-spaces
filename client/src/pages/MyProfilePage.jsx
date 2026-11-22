@@ -392,11 +392,8 @@ function MyProfilePage() {
 
   useEffect(() => {
     localStorage.setItem("watchspace.soundEnabled", String(soundEnabled));
-  }, [soundEnabled]);
-
-  useEffect(() => {
     localStorage.setItem("watchspace.vibrationEnabled", String(vibrationEnabled));
-  }, [vibrationEnabled]);
+  }, [soundEnabled, vibrationEnabled]);
 
   // Profile states
   const [name, setName] = useState(user?.name || "");
