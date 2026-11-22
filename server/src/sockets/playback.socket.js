@@ -131,6 +131,95 @@ export const triggerDueTriviaEvents = async (
 
 
 
+export const applyDueVariation = async (
+  io,
+  watchSpaceId,
+  previousPosition,
+  currentPosition,
+  playbackState,
+) => {
+  try {
+    if (playbackState !== "playing") return;
+
+    if (previousPosition === null || previousPosition === undefined) {
+      return;
+    }
+
+    if (currentPosition <= previousPosition) return;
+
+    const watchSpace = await WatchSpace.findOneAndUpdate(
+      {
+        _id: watchSpaceId,
+        "activeVote.status": "closed",
+        "activeVote.appliedAt": null,
+        $expr: {
+          $lte: ["$activeVote.applyAtSeconds", currentPosition],
+        },
+      },
+      {
+        $set: {
+          "activeVote.status": "applied",
+          "activeVote.appliedAt": new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    if (!watchSpace) return;
+
+    const vote = watchSpace.activeVote;
+
+    io.to(`watchspace:${watchSpaceId}`).emit("room.variation.applied", {
+      watchSpaceId: watchSpaceId.toString(),
+      variationId: vote.variationId,
+      winningOptionId: vote.winningOptionId,
+      applyAtSeconds: vote.applyAtSeconds,
+      appliedAt: vote.appliedAt,
+    });
+
+    console.log(
+      `Variation applied: ${vote.variationId} in WatchSpace ${watchSpaceId}`,
+    );
+  } catch (error) {
+    console.error("Variation application error:", error);
+  }
+};
+
+export const applyDueClosedVariation = async (io, watchSpaceId, currentPosition) => {
+  if (!Number.isFinite(currentPosition) || currentPosition < 0) return;
+
+  try {
+    const watchSpace = await WatchSpace.findOneAndUpdate(
+      {
+        _id: watchSpaceId,
+        "activeVote.status": "closed",
+        "activeVote.appliedAt": null,
+        $expr: { $lte: ["$activeVote.applyAtSeconds", currentPosition] },
+      },
+      {
+        $set: {
+          "activeVote.status": "applied",
+          "activeVote.appliedAt": new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    if (!watchSpace?.activeVote) return;
+
+    const vote = watchSpace.activeVote;
+    io.to(`watchspace:${watchSpaceId}`).emit("room.variation.applied", {
+      watchSpaceId: watchSpaceId.toString(),
+      variationId: vote.variationId,
+      winningOptionId: vote.winningOptionId,
+      applyAtSeconds: vote.applyAtSeconds,
+      appliedAt: vote.appliedAt,
+    });
+  } catch (error) {
+    console.error("Due variation recovery error:", error);
+  }
+};
+
 const registerPlaybackHandlers = (io, socket) => {
   const progressTrackers = new Map();
 
