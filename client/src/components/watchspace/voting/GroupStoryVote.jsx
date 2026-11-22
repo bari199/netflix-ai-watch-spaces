@@ -47,6 +47,8 @@ export default function GroupStoryVote({
   const isVoteOpen = activeVote?.status === "open";
   const isVoteClosed = activeVote?.status === "closed";
   const isVoteApplied = activeVote?.status === "applied";
+  const modeChangeDisabled =
+    playbackModeSaving || isVoteOpen || isVoteClosed;
 
   const winningOption = activeVote?.options?.find(
     (option) =>
@@ -116,7 +118,7 @@ export default function GroupStoryVote({
                   <button
                     key={mode}
                     type="button"
-                    disabled={playbackModeSaving}
+                    disabled={modeChangeDisabled}
                     aria-pressed={selected}
                     onClick={() => onPlaybackModeChange?.(mode)}
                     className={`rounded-md px-2 py-2 text-[11px] font-semibold capitalize transition disabled:cursor-wait disabled:opacity-50 ${
