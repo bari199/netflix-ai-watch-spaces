@@ -13,6 +13,7 @@ import {
   Captions,
   LoaderCircle,
   Lock,
+  GitBranch,
 } from "lucide-react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
@@ -51,6 +52,7 @@ export default function CinematicPlayer({
   onSeeked,
   playbackMode = "manual",
   pendingHeroStart = false,
+  variationPoints = [],
 }) {
   const containerRef = useRef(null);
   const hideControlsTimer = useRef(null);
@@ -65,6 +67,7 @@ export default function CinematicPlayer({
   const [showSettings, setShowSettings] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [showVotingMarkers, setShowVotingMarkers] = useState(true);
 
   const selectedVariantId =
     typeof selectedSubtitle === "string"
@@ -524,6 +527,20 @@ export default function CinematicPlayer({
                   className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
 
+                {showVotingMarkers && duration > 0 && variationPoints.map((point) => {
+                  const markerTime = Number(point.startTime);
+                  if (!Number.isFinite(markerTime) || markerTime < 0 || markerTime > duration) return null;
+                  return (
+                    <span
+                      key={point.eventId || point.variationId}
+                      title={`${point.description || point.text || "Voting point"} · ${formatTime(markerTime)}`}
+                      aria-label={`Voting point at ${formatTime(markerTime)}`}
+                      className="pointer-events-none absolute z-20 h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
+                      style={{ left: `${(markerTime / duration) * 100}%` }}
+                    />
+                  );
+                })}
+
                 <div
                   className="pointer-events-none absolute h-3 w-3 rounded-full bg-red-600 opacity-0 transition-opacity group-hover/progress:opacity-100"
                   style={{
@@ -582,6 +599,18 @@ export default function CinematicPlayer({
 
                 {/* Right controls */}
                 <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+                  {variationPoints.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowVotingMarkers((visible) => !visible)}
+                      aria-label={showVotingMarkers ? "Hide voting timeline markers" : "Show voting timeline markers"}
+                      aria-pressed={showVotingMarkers}
+                      title={showVotingMarkers ? "Hide voting markers" : "Show voting markers"}
+                      className={`transition hover:text-red-400 ${showVotingMarkers ? "text-red-400" : "text-white/55"}`}
+                    >
+                      <GitBranch size={19} />
+                    </button>
+                  )}
                   <div className="relative">
                       <button
                         type="button"
