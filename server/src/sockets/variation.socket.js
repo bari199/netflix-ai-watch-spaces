@@ -47,6 +47,40 @@ export const resolveVariationWinner = (options, votes) => {
   return { voteCounts, winningOptionId };
 };
 
+export const applyDueClosedVariation = async (io, watchSpaceId, currentPosition) => {
+  if (!Number.isFinite(currentPosition) || currentPosition < 0) return;
+
+  try {
+    const watchSpace = await WatchSpace.findOneAndUpdate(
+      {
+        _id: watchSpaceId,
+        "activeVote.status": "closed",
+        "activeVote.appliedAt": null,
+        $expr: { $lte: ["$activeVote.applyAtSeconds", currentPosition] },
+      },
+      {
+        $set: {
+          "activeVote.status": "applied",
+          "activeVote.appliedAt": new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    if (!watchSpace?.activeVote) return;
+
+    const vote = watchSpace.activeVote;
+    io.to(getRoomName(watchSpaceId)).emit("room.variation.applied", {
+      variationId: vote.variationId,
+      winningOptionId: vote.winningOptionId,
+      applyAtSeconds: vote.applyAtSeconds,
+      appliedAt: vote.appliedAt,
+    });
+  } catch (error) {
+    console.error("Due variation recovery error:", error);
+  }
+};
+
 const closeVote = async (io, watchSpaceId) => {
   try {
     const watchSpace = await WatchSpace.findById(watchSpaceId);
@@ -69,6 +103,12 @@ const closeVote = async (io, watchSpaceId) => {
     await watchSpace.save();
 
     const roomName = getRoomName(watchSpaceId);
+
+    await applyDueClosedVariation(
+      io,
+      watchSpaceId,
+      Number(watchSpace.playback?.positionSeconds) || 0,
+    );
 
     io.to(roomName).emit("room.variation.voteResult", {
       variationId: vote.variationId,
@@ -141,8 +181,8 @@ const registerVariationHandlers = (io, socket) => {
         return sendError(callback, "Voting is disabled in this WatchSpace.");
       }
 
-      if (watchSpace.activeVote && watchSpace.activeVote.status === "open") {
-        return sendError(callback, "A vote is already in progress.");
+      if (watchSpace.activeVote && ["open", "closed"].includes(watchSpace.activeVote.status)) {
+        return sendError(callback, "The previous vote has not been applied yet.");
       }
 
       const title = await Title.findById(watchSpace.title);
