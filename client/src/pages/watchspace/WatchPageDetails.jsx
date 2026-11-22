@@ -1596,6 +1596,7 @@ const WatchPageDetails = () => {
                   onSeeked={() => emitPlaybackControl("seek")}
                   playbackMode={watchSpace.playbackMode || "manual"}
                   pendingHeroStart={startPlayerOnMount}
+                  variationPoints={variationPoints}
                 />
               ) : (
                 <RoomHero
