@@ -354,6 +354,45 @@ const registerPlaybackHandlers = (io, socket) => {
     return flushed;
   };
 
+  socket.on("room.playback.mode.update", async (data = {}, callback) => {
+    try {
+      const { watchSpaceId, mode } = data;
+      if (!mongoose.isValidObjectId(watchSpaceId)) {
+        throw new Error("Invalid WatchSpace ID");
+      }
+      if (!["manual", "automatic"].includes(mode)) {
+        throw new Error("Invalid playback mode");
+      }
+      const roomName = `watchspace:${watchSpaceId}`;
+      if (!socket.rooms.has(roomName)) {
+        throw new Error("You are not connected to this WatchSpace");
+      }
+
+      const watchSpace = await WatchSpace.findById(watchSpaceId);
+      if (!watchSpace) throw new Error("WatchSpace not found");
+      if (watchSpace.host.toString() !== getUserId()) {
+        throw new Error("Only the host can change playback mode");
+      }
+
+      watchSpace.playbackMode = mode;
+      await watchSpace.save();
+
+      io.to(roomName).emit("room.playback.mode.changed", {
+        watchSpaceId: watchSpaceId.toString(),
+        mode,
+        updatedBy: getUserId(),
+      });
+
+      if (typeof callback === "function") {
+        callback({ success: true, playbackMode: mode });
+      }
+    } catch (error) {
+      if (typeof callback === "function") {
+        callback({ success: false, message: error.message });
+      }
+    }
+  });
+
   socket.on("playback.control", async (data, callback) => {
     try {
       const { watchSpaceId, action, positionSeconds } = data || {};
