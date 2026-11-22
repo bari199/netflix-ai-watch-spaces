@@ -23,6 +23,7 @@ test("automatic voting opens once when playback crosses a variation marker", asy
   const event = {
     eventId: "timeline-event-40",
     variationId: "ending-choice",
+    question: "Should the hero save the village or follow the signal?",
     eventType: "variationPoint",
     startTime: 40,
     options,
@@ -71,6 +72,10 @@ test("automatic voting opens once when playback crosses a variation marker", asy
 
   assert.equal(started, true);
   assert.equal(update.$set.activeVote.mode, "automatic");
+  assert.equal(
+    update.$set.activeVote.question,
+    "Should the hero save the village or follow the signal?",
+  );
   assert.equal(update.$set.activeVote.durationSeconds, 60);
   assert.equal(update.$set.activeVote.applyAtSeconds, 40);
   assert.deepEqual(update.$addToSet, {
@@ -79,6 +84,7 @@ test("automatic voting opens once when playback crosses a variation marker", asy
   assert.equal(emitted.eventName, "room.variation.voteOpen");
   assert.equal(emitted.payload.mode, "automatic");
   assert.equal(emitted.payload.variationId, event.variationId);
+  assert.equal(emitted.payload.question, event.question);
 });
 
 test("automatic voting does not reopen a timeline marker already triggered", async (t) => {
