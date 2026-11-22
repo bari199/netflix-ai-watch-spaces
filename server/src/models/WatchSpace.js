@@ -78,6 +78,11 @@ const activeVoteSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    question: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     eventId: {
       type: String,
       default: null,
