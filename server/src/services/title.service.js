@@ -147,6 +147,17 @@ export const validateTimelineMetadata = (timeline, duration) => {
     }
 
     if (eventType === "variationPoint") {
+      if (
+        event.question !== undefined &&
+        event.question !== null &&
+        typeof event.question !== "string"
+      ) {
+        throwTimelineValidationError(
+          `${path}.question`,
+          "Variation voting question must be text",
+        );
+      }
+
       if (!isNonblankString(event.variationId)) {
         throwTimelineValidationError(
           `${path}.variationId`,
