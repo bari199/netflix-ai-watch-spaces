@@ -6,13 +6,111 @@ import {
   applyDueVariation,
   applyDueClosedVariation,
 } from "../src/sockets/playback.socket.js";
-import { resolveVariationWinner } from "../src/sockets/variation.socket.js";
+import {
+  resolveVariationWinner,
+  triggerDueAutomaticVariationVote,
+} from "../src/sockets/variation.socket.js";
 
 const options = [
   { id: "north", label: "Go north" },
   { id: "south", label: "Go south" },
   { id: "east", label: "Go east" },
 ];
+
+test("automatic voting opens once when playback crosses a variation marker", async (t) => {
+  const watchSpaceId = new mongoose.Types.ObjectId().toString();
+  const event = {
+    eventId: "timeline-event-40",
+    variationId: "ending-choice",
+    eventType: "variationPoint",
+    startTime: 40,
+    options,
+  };
+  const watchSpace = {
+    _id: watchSpaceId,
+    status: "active",
+    playbackMode: "automatic",
+    playback: { state: "playing", positionSeconds: 40.2 },
+    votingEnabled: true,
+    activeVote: null,
+    triggeredVariationEventIds: [],
+    title: { timeline: [event] },
+    host: "host-user-id",
+  };
+  let update;
+  let emitted;
+
+  t.mock.method(WatchSpace, "findOneAndUpdate", async (filter, changes) => {
+    assert.equal(filter.playbackMode, "automatic");
+    assert.equal(filter.triggeredVariationEventIds.$ne, event.eventId);
+    update = changes;
+    return { ...watchSpace, activeVote: changes.$set.activeVote };
+  });
+  t.mock.method(globalThis, "setTimeout", () => ({
+    unref() {},
+  }));
+
+  const io = {
+    to(room) {
+      return {
+        emit(eventName, payload) {
+          emitted = { room, eventName, payload };
+        },
+      };
+    },
+  };
+
+  const started = await triggerDueAutomaticVariationVote(
+    io,
+    watchSpaceId,
+    39.2,
+    40.2,
+    watchSpace,
+  );
+
+  assert.equal(started, true);
+  assert.equal(update.$set.activeVote.mode, "automatic");
+  assert.equal(update.$set.activeVote.durationSeconds, 60);
+  assert.equal(update.$set.activeVote.applyAtSeconds, 40);
+  assert.deepEqual(update.$addToSet, {
+    triggeredVariationEventIds: event.eventId,
+  });
+  assert.equal(emitted.eventName, "room.variation.voteOpen");
+  assert.equal(emitted.payload.mode, "automatic");
+  assert.equal(emitted.payload.variationId, event.variationId);
+});
+
+test("automatic voting does not reopen a timeline marker already triggered", async (t) => {
+  const watchSpace = {
+    _id: new mongoose.Types.ObjectId().toString(),
+    status: "active",
+    playbackMode: "automatic",
+    playback: { state: "playing", positionSeconds: 41 },
+    votingEnabled: true,
+    activeVote: null,
+    triggeredVariationEventIds: ["timeline-event-40"],
+    title: {
+      timeline: [{
+        eventId: "timeline-event-40",
+        variationId: "ending-choice",
+        eventType: "variationPoint",
+        startTime: 40,
+        options,
+      }],
+    },
+    host: "host-user-id",
+  };
+
+  const started = await triggerDueAutomaticVariationVote(
+    {},
+    watchSpace._id,
+    39,
+    41,
+    watchSpace,
+  );
+
+  assert.equal(started, false);
+});
 
 test("variation vote ties resolve by authored option order", () => {
   const result = resolveVariationWinner(options, [
