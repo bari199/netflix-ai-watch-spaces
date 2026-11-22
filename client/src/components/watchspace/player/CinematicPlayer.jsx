@@ -50,7 +50,6 @@ export default function CinematicPlayer({
   onPlay,
   onPause,
   onSeeked,
-  playbackMode = "manual",
   pendingHeroStart = false,
   variationPoints = [],
 }) {
@@ -76,7 +75,7 @@ export default function CinematicPlayer({
 
   const displayTitle = title?.name || title?.title || title || "Now Playing";
 
-  const canControlPlayback = isHost && playbackMode === "manual";
+  const canControlPlayback = isHost;
   const canStartFromHero = isHost && pendingHeroStart;
 
   const clearControlsTimer = () => {
