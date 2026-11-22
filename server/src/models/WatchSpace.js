@@ -153,6 +153,11 @@ const watchSpaceSchema = new mongoose.Schema(
       type: playbackSchema,
       default: () => ({}),
     },
+    playbackMode: {
+      type: String,
+      enum: ["manual", "automatic"],
+      default: "manual",
+    },
     maxParticipants: {
       type: Number,
       default: 50,
