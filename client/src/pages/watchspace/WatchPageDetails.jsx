@@ -10,6 +10,7 @@ import {
   leaveWatchSpace,
   endWatchSpace,
   setWatchSpaceLock,
+  setPlaybackMode,
   setParticipantMute,
   removeParticipant,
   transferWatchSpaceHost,
@@ -80,6 +81,7 @@ const WatchPageDetails = () => {
   const [subtitleSelection, setSubtitleSelection] = useState(null);
   const [playerStarted, setPlayerStarted] = useState(false);
   const [startPlayerOnMount, setStartPlayerOnMount] = useState(false);
+  const [playbackModeSaving, setPlaybackModeSaving] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState("chat");
 
   const videoRef = useRef(null);
@@ -1150,6 +1152,33 @@ const WatchPageDetails = () => {
     [isHost, watchSpaceId],
   );
 
+  // Change host playback mode without navigating or refreshing the page.
+  const handlePlaybackModeChange = async (mode) => {
+    if (!isHost || !watchSpace || playbackModeSaving) return;
+
+    const previousMode = watchSpace.playbackMode || "manual";
+    if (mode === previousMode) return;
+
+    setPlaybackModeSaving(true);
+    setError("");
+
+    try {
+      const response = await setPlaybackMode(watchSpaceId, mode);
+      setWatchSpace((previous) =>
+        previous
+          ? { ...previous, ...response.watchSpace, title: previous.title }
+          : previous,
+      );
+    } catch (modeError) {
+      setError(
+        modeError?.response?.data?.message ||
+          "Could not update playback mode.",
+      );
+    } finally {
+      setPlaybackModeSaving(false);
+    }
+  };
+
   // Chat Input
   const handleChatInputChange = (event) => {
     const value = event.target.value;
@@ -1642,6 +1671,9 @@ const WatchPageDetails = () => {
                   actionLoading={actionLoading}
                   connectionQuality={connectionQuality}
                   connectionLatency={connectionLatency}
+                  playbackMode={watchSpace.playbackMode || "manual"}
+                  playbackModeSaving={playbackModeSaving}
+                  onPlaybackModeChange={handlePlaybackModeChange}
                   copiedInviteCode={copiedInviteCode}
                   copiedInviteLink={copiedInviteLink}
                   onCopyInviteCode={handleCopyInviteCode}
