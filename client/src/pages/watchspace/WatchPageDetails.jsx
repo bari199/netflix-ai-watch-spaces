@@ -413,6 +413,14 @@ const WatchPageDetails = () => {
 
         console.log("WatchSpace room joined:", response);
 
+        if (["manual", "automatic"].includes(response.playbackMode)) {
+          setWatchSpace((previous) =>
+            previous
+              ? { ...previous, playbackMode: response.playbackMode }
+              : previous,
+          );
+        }
+
         // Apply a pending restoration after the video metadata is available.
         const playback = response.playback;
         if (playback && Number.isFinite(Number(playback.positionSeconds))) {
