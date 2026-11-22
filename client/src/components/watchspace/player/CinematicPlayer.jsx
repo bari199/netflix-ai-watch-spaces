@@ -723,7 +723,7 @@ export default function CinematicPlayer({
                   </button>
                   <button
                     type="button"
-                    onClick={toggleFullscreen
+                    onClick={toggleFullscreen}
                     aria-label="Toggle fullscreen"
                     className="transition hover:text-red-400"
                   >
