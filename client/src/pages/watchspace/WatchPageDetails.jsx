@@ -528,6 +528,18 @@ const WatchPageDetails = () => {
       });
     };
 
+    const handlePlaybackModeChanged = (data) => {
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !["manual", "automatic"].includes(data?.mode)
+      ) return;
+
+      setWatchSpace((previous) =>
+        previous ? { ...previous, playbackMode: data.mode } : previous,
+      );
+    };
+
     const handleDisconnect = (reason) => {
       roomJoined = false;
       setOnlineParticipants([]);
@@ -899,6 +911,7 @@ const WatchPageDetails = () => {
     socket.on("connect_error", handleConnectError);
 
     socket.on("room.playback.update", handlePlaybackUpdate);
+    socket.on("room.playback.mode.changed", handlePlaybackModeChanged);
     socket.on("room.playback.position", handleAuthoritativePosition);
 
     socket.on("room.sync.correction", handleSyncCorrection);
@@ -962,6 +975,7 @@ const WatchPageDetails = () => {
       socket.off("connect_error", handleConnectError);
 
       socket.off("room.playback.update", handlePlaybackUpdate);
+      socket.off("room.playback.mode.changed", handlePlaybackModeChanged);
       socket.off("room.playback.position", handleAuthoritativePosition);
 
       socket.off("room.sync.correction", handleSyncCorrection);
