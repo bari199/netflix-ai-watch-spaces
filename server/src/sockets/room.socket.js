@@ -39,6 +39,7 @@ const registerRoomHandlers = (io, socket) => {
         watchSpaceId,
         userId: socket.user._id.toString(),
         role: participant.role,
+        playbackMode: watchSpace.playbackMode || "manual",
         playback: {
           state: watchSpace.playback?.state || "paused",
           positionSeconds: Number(watchSpace.playback?.positionSeconds) || 0,
