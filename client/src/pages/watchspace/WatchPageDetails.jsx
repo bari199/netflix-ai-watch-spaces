@@ -1025,6 +1025,34 @@ const WatchPageDetails = () => {
     };
   }, [startPlayerOnMount, playerStarted]);
 
+  // Mount the player before trying to start media from the Hero button.
+  useEffect(() => {
+    if (!startPlayerOnMount || !playerStarted) return undefined;
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    let cancelled = false;
+    const startPlayback = () => {
+      if (cancelled) return;
+      setStartPlayerOnMount(false);
+      video.play().catch((playError) => {
+        console.warn("Video autoplay was blocked:", playError?.message);
+        setError("Press Play in the video player to start playback.");
+      });
+    };
+
+    if (video.readyState >= 2) {
+      requestAnimationFrame(startPlayback);
+    } else {
+      video.addEventListener("canplay", startPlayback, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("canplay", startPlayback);
+    };
+  }, [startPlayerOnMount, playerStarted]);
+
   // Keep the vote countdown synchronized with the backend closesAt timestamp.
   useEffect(() => {
     if (!activeVote || activeVote.status !== "open" || !activeVote.closesAt) {
