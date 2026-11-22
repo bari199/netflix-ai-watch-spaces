@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import WatchSpace from "../src/models/WatchSpace.js";
-import { applyDueVariation } from "../src/sockets/playback.socket.js";
+import {
+  applyDueVariation,
+  applyDueClosedVariation,
+} from "../src/sockets/playback.socket.js";
 import { resolveVariationWinner } from "../src/sockets/variation.socket.js";
 
 const options = [
@@ -62,4 +65,46 @@ test("a closed vote applies after its marker even if the marker was crossed befo
   assert.equal(emitted.room, `watchspace:${watchSpaceId}`);
   assert.equal(emitted.eventName, "room.variation.applied");
   assert.equal(emitted.payload.winningOptionId, "north");
+});
+
+test("a closed vote applies after the timeline marker has already passed", async (t) => {
+  const watchSpaceId = new mongoose.Types.ObjectId().toString();
+  const appliedAt = new Date();
+  let emitted;
+
+  t.mock.method(WatchSpace, "findOneAndUpdate", async (filter) => {
+    assert.equal(filter._id, watchSpaceId);
+    assert.equal(filter["activeVote.status"], "closed");
+    assert.equal(filter["activeVote.appliedAt"], null);
+    assert.deepEqual(filter.$expr, {
+      $lte: ["$activeVote.applyAtSeconds", 50],
+    });
+
+    return {
+      activeVote: {
+        variationId: "ending-choice",
+        winningOptionId: "south",
+        applyAtSeconds: 30,
+        appliedAt,
+      },
+    };
+  });
+
+  const io = {
+    to(room) {
+      return {
+        emit(eventName, payload) {
+          emitted = { room, eventName, payload };
+        },
+      };
+    },
+  };
+
+  await applyDueClosedVariation(io, watchSpaceId, 50);
+
+  assert.equal(emitted.room, `watchspace:${watchSpaceId}`);
+  assert.equal(emitted.eventName, "room.variation.applied");
+  assert.equal(emitted.payload.watchSpaceId, watchSpaceId);
+  assert.equal(emitted.payload.winningOptionId, "south");
+  assert.equal(emitted.payload.applyAtSeconds, 30);
 });
