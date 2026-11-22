@@ -804,7 +804,7 @@ const WatchPageDetails = () => {
     const handleVoteOpen = (data) => {
       if (
         !active ||
-        String(data?.watchSpaceId || watchSpaceId) !== String(watchSpaceId) ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
         !data?.variationId
       ) return;
 
@@ -820,7 +820,11 @@ const WatchPageDetails = () => {
     };
 
     const handleVoteResult = (data) => {
-      if (!active || !data?.variationId) return;
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !data?.variationId
+      ) return;
 
       setActiveVote((previous) => {
         if (!previous || previous.variationId !== data.variationId) {
@@ -841,7 +845,11 @@ const WatchPageDetails = () => {
     };
 
     const handleVariationApplied = (data) => {
-      if (!active || !data?.variationId) return;
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !data?.variationId
+      ) return;
 
       setActiveVote((previous) => {
         if (!previous || previous.variationId !== data.variationId) {
