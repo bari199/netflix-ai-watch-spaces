@@ -65,36 +65,52 @@ const closeVote = async (io, watchSpaceId) => {
       vote.votes,
     );
 
-    vote.status = "closed";
-    vote.winningOptionId = winningOptionId;
+    // Automatic polls apply at the latest persisted playback position
+    // when their 60-second voting window closes.
+    const applyAtSeconds =
+      vote.mode === "automatic"
+        ? Number(watchSpace.playback?.positionSeconds) || 0
+        : vote.applyAtSeconds;
 
-    // Automatic polls apply the winning branch at the playback position
-    // reached when the 60-second voting window closes.
-    if (vote.mode === "automatic") {
-      vote.applyAtSeconds = Number(watchSpace.playback?.positionSeconds) || 0;
-    }
+    // Only one timer/recovery request may close this poll and emit its result.
+    const closedWatchSpace = await WatchSpace.findOneAndUpdate(
+      {
+        _id: watchSpaceId,
+        "activeVote.status": "open",
+      },
+      {
+        $set: {
+          "activeVote.status": "closed",
+          "activeVote.winningOptionId": winningOptionId,
+          "activeVote.applyAtSeconds": applyAtSeconds,
+        },
+      },
+      { new: true },
+    );
 
-    await watchSpace.save();
+    if (!closedWatchSpace?.activeVote) return;
 
+    const closedVote = closedWatchSpace.activeVote;
     const roomName = getRoomName(watchSpaceId);
 
     io.to(roomName).emit("room.variation.voteResult", {
       watchSpaceId: watchSpaceId.toString(),
-      variationId: vote.variationId,
+      variationId: closedVote.variationId,
       voteCounts,
       winningOptionId,
-      applyAtSeconds: vote.applyAtSeconds,
-      mode: vote.mode || "manual",
+      applyAtSeconds: closedVote.applyAtSeconds,
+      mode: closedVote.mode || "manual",
     });
 
   } catch (error) {
     console.error("Variation vote closing error:", error);
   } finally {
-    const timer = activeVoteTimers.get(watchSpaceId);
+    const timerKey = watchSpaceId.toString();
+    const timer = activeVoteTimers.get(timerKey);
 
     if (timer) {
       clearTimeout(timer);
-      activeVoteTimers.delete(watchSpaceId);
+      activeVoteTimers.delete(timerKey);
     }
   }
 };
