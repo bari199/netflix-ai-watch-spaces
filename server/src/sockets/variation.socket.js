@@ -73,17 +73,13 @@ const closeVote = async (io, watchSpaceId) => {
     const roomName = getRoomName(watchSpaceId);
 
     io.to(roomName).emit("room.variation.voteResult", {
+      watchSpaceId: watchSpaceId.toString(),
       variationId: vote.variationId,
       voteCounts,
       winningOptionId,
       applyAtSeconds: vote.applyAtSeconds,
     });
 
-    await applyDueClosedVariation(
-      io,
-      watchSpaceId,
-      Number(watchSpace.playback?.positionSeconds) || 0,
-    );
   } catch (error) {
     console.error("Variation vote closing error:", error);
   } finally {
