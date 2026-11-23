@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildTimelineQuestions } from "../src/services/ai/suggestions.service.js";
 
-test("builds context-aware questions only from available timeline event types", () => {
+test("builds context-aware questions from the supplied playback timeline events", () => {
   const suggestions = buildTimelineQuestions([
     {
       eventId: "scene-1",
@@ -28,12 +28,6 @@ test("builds context-aware questions only from available timeline event types", 
       startTime: 7,
       text: "Quantum relay: a device that transmits across dimensions.",
     },
-    {
-      eventId: "future-event",
-      eventType: "scene",
-      startTime: 50,
-      text: "A future event must not be supplied to this builder.",
-    },
   ]);
 
   assert.equal(suggestions.length, 4);
@@ -41,8 +35,8 @@ test("builds context-aware questions only from available timeline event types", 
     suggestions.map(({ type }) => type),
     ["scene", "character", "trivia", "glossary"],
   );
-  assert.equal(suggestions[0].eventId, "future-event");
-  assert.match(suggestions[0].question, /A future event/);
+  assert.equal(suggestions[0].eventId, "scene-1");
+  assert.match(suggestions[0].question, /hidden signal/);
   assert.equal(suggestions[1].eventId, "character-1");
 });
 
