@@ -87,13 +87,13 @@ const startServer = async (t) => {
   return `http://127.0.0.1:${server.address().port}`;
 };
 
-const sendRequest = (baseUrl, { token, body }) =>
+const sendRequest = (baseUrl, { token, body, path = ENDPOINT, method = "POST" }) =>
   new Promise((resolve, reject) => {
-    const url = new URL(ENDPOINT, baseUrl);
+    const url = new URL(path, baseUrl);
     const request = http.request(
       url,
       {
-        method: "POST",
+        method,
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -298,4 +298,46 @@ test("rejects an invalid question with 400 before accessing the WatchSpace", asy
 
   assert.equal(response.status, 400);
   assert.equal(watchSpaceReads.mock.callCount(), 0);
+});
+
+
+test("returns playback-aware AI suggestions to an authenticated WatchSpace participant", async (t) => {
+  configureAuth(t);
+  mockWatchSpaceReads(t, createWatchSpace());
+  mockTitleLookup(t);
+  const baseUrl = await startServer(t);
+
+  const response = await sendRequest(baseUrl, {
+    token: createToken(PARTICIPANT_ID),
+    method: "GET",
+    path: `/api/watch-spaces/${WATCH_SPACE_ID}/ai/suggestions`,
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.currentTime, 20);
+  assert.deepEqual(
+    response.body.suggestions.map(({ type, eventId }) => ({ type, eventId })),
+    [{ type: "scene", eventId: "past-scene" }],
+  );
+  assert.match(response.body.suggestions[0].question, /Mara enters the observatory/);
+});
+
+test("denies nonparticipants from viewing AI suggestions", async (t) => {
+  configureAuth(t);
+  const watchSpaceReads = mockWatchSpaceReads(
+    t,
+    createWatchSpace({ isPrivate: false }),
+  );
+  const titleLookup = t.mock.method(Title, "findOne", async () => createTitle());
+  const baseUrl = await startServer(t);
+
+  const response = await sendRequest(baseUrl, {
+    token: createToken(NONPARTICIPANT_ID),
+    method: "GET",
+    path: `/api/watch-spaces/${WATCH_SPACE_ID}/ai/suggestions`,
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(watchSpaceReads.mock.callCount(), 1);
+  assert.equal(titleLookup.mock.callCount(), 0);
 });
