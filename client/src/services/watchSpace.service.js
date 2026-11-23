@@ -20,6 +20,14 @@ export const askWatchSpaceAI = async (watchSpaceId, question) => {
   return response.data;
 };
 
+// Get AI questions grounded in the current WatchSpace playback timeline
+export const getWatchSpaceAISuggestions = async (watchSpaceId) => {
+  const response = await api.get(
+    `/watch-spaces/${watchSpaceId}/ai/suggestions`,
+  );
+  return response.data;
+};
+
 // Create a new WatchSpace
 export const createWatchSpace = async (watchSpaceData) => {
   const response = await api.post("/watch-spaces", watchSpaceData);
