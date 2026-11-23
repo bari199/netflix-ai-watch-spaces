@@ -209,6 +209,7 @@ test("allows an authenticated WatchSpace host and returns the Q&A contract", asy
   assert.deepEqual(Object.keys(response.body).sort(), [
     "answer",
     "answerMode",
+    "followUpQuestions",
     "generatedAt",
     "sourceEvents",
   ]);
