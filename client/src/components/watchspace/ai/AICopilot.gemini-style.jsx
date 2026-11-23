@@ -187,6 +187,38 @@ export default function AICopilot({
                   </div>
                 </section>
               )}
+              {Array.isArray(currentAiResponse.followUpQuestions) &&
+                currentAiResponse.followUpQuestions.length > 0 && (
+                  <section className="ml-9 border-t border-white/[0.07] pt-3">
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <MessageCircleQuestion size={12} className="text-sky-300" />
+                      <h3 className="text-[10px] font-semibold text-white/60">
+                        Keep exploring
+                      </h3>
+                    </div>
+                    <div className="space-y-2">
+                      {currentAiResponse.followUpQuestions.map((item) => (
+                        <button
+                          key={item.eventId || item.question}
+                          type="button"
+                          onClick={() => submitQuestion(item.question)}
+                          disabled={isAskingAI}
+                          className="group flex w-full items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-left transition hover:border-sky-400/25 hover:bg-sky-400/[0.045] disabled:opacity-45"
+                        >
+                          <span className="text-xs">{item.icon || "✨"}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[11px] font-medium text-white/80 group-hover:text-white">
+                              {item.label || item.question}
+                            </span>
+                            <span className="mt-0.5 block text-[10px] text-white/35">
+                              {item.description || item.question}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               <div ref={responseEndRef} />
             </motion.div>
           )}
