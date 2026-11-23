@@ -69,6 +69,7 @@ export const askWatchSpaceAIController = async (req, res) => {
       answer: result.answer,
       answerMode: result.answerMode,
       sourceEvents: result.sourceEvents,
+      followUpQuestions: result.followUpQuestions || [],
       generatedAt: result.generatedAt,
     });
   } catch (error) {
