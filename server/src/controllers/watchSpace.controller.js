@@ -1,7 +1,6 @@
 import {
   createWatchSpace,
   getWatchSpaceById,
-  updateWatchSpaceVotingSettings,
   getActiveWatchSpaces,
   joinWatchSpace,
   leaveWatchSpace,

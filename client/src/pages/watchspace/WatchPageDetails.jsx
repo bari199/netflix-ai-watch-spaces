@@ -511,7 +511,10 @@ const WatchPageDetails = () => {
         // Apply a pending restoration after the video metadata is available.
         const playback = response.playback;
         if (playback && Number.isFinite(Number(playback.positionSeconds))) {
-          const restoredPosition = Math.max(0, Number(playback.positionSeconds));
+          const restoredPosition = Math.max(
+            0,
+            Number(playback.positionSeconds),
+          );
           const restoredState = playback.state || "paused";
 
           setWatchSpace((previous) =>
@@ -539,7 +542,10 @@ const WatchPageDetails = () => {
 
             if (restoredState === "playing") {
               video.play().catch((playError) => {
-                console.warn("Playback resume requires a user gesture:", playError?.message);
+                console.warn(
+                  "Playback resume requires a user gesture:",
+                  playError?.message,
+                );
               });
             } else {
               video.pause();
@@ -628,7 +634,8 @@ const WatchPageDetails = () => {
         !active ||
         String(data?.watchSpaceId) !== String(watchSpaceId) ||
         !["manual", "automatic"].includes(data?.mode)
-      ) return;
+      )
+        return;
 
       setWatchSpace((previous) =>
         previous ? { ...previous, playbackMode: data.mode } : previous,
@@ -918,7 +925,8 @@ const WatchPageDetails = () => {
         !active ||
         String(data?.watchSpaceId) !== String(watchSpaceId) ||
         !data?.variationId
-      ) return;
+      )
+        return;
 
       setActiveVote({
         variationId: data.variationId,
@@ -941,12 +949,49 @@ const WatchPageDetails = () => {
       setVoteMessage("A new group vote has started.");
     };
 
+    // Live vote totals are broadcast to everyone in the WatchSpace room.
+    // The server payload contains variationId, voteCount, voteCounts,
+    // isNewVote and updatedOptionId (it does not include watchSpaceId).
+    const handleVoteUpdate = (data) => {
+      if (!active || !data?.variationId) return;
+
+      setActiveVote((previous) => {
+        if (
+          !previous ||
+          String(previous.variationId) !== String(data.variationId) ||
+          previous.status !== "open"
+        ) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          voteCount: Number.isFinite(Number(data.voteCount))
+            ? Number(data.voteCount)
+            : previous.voteCount,
+          voteCounts:
+            data.voteCounts && typeof data.voteCounts === "object"
+              ? data.voteCounts
+              : previous.voteCounts || {},
+        };
+      });
+
+      // The backend marks whether this event added a new vote rather than
+      // replacing an existing vote. Do not change selectedVoteOption here:
+      // this event is broadcast to every participant, not just the voter.
+      if (data.isNewVote) {
+        playVoteNotification();
+        triggerVoteVibration();
+      }
+    };
+
     const handleVoteResult = (data) => {
       if (
         !active ||
         String(data?.watchSpaceId) !== String(watchSpaceId) ||
         !data?.variationId
-      ) return;
+      )
+        return;
 
       setActiveVote((previous) => {
         if (!previous || previous.variationId !== data.variationId) {
@@ -972,7 +1017,8 @@ const WatchPageDetails = () => {
         !active ||
         String(data?.watchSpaceId) !== String(watchSpaceId) ||
         !data?.variationId
-      ) return;
+      )
+        return;
 
       setActiveVote((previous) => {
         if (!previous || previous.variationId !== data.variationId) {
@@ -1340,8 +1386,7 @@ const WatchPageDetails = () => {
       );
     } catch (modeError) {
       setError(
-        modeError?.response?.data?.message ||
-          "Could not update playback mode.",
+        modeError?.response?.data?.message || "Could not update playback mode.",
       );
     } finally {
       setPlaybackModeSaving(false);
@@ -1672,9 +1717,7 @@ const WatchPageDetails = () => {
   const currentPlaybackState = watchSpace.playback?.state || "paused";
   // Keep the movie player mounted after it has been entered, including paused state.
   const isPlayerVisible =
-    playerStarted ||
-    currentPlaybackState === "playing" ||
-    playbackPosition > 0;
+    playerStarted || currentPlaybackState === "playing" || playbackPosition > 0;
 
   const variationPoints = Array.isArray(title?.timeline)
     ? title.timeline.filter(
