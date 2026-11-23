@@ -407,7 +407,7 @@ const WatchPageDetails = () => {
     aiResponse?.watchSpaceId === watchSpaceId ? aiResponse : null;
 
   useEffect(() => {
-    if (!watchSpaceId || !isParticipant || isEnded) {
+    if (!watchSpaceId || (!isHost && !isParticipant) || isEnded) {
       setAiSuggestedQuestions([]);
       return undefined;
     }
