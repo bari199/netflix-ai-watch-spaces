@@ -1497,6 +1497,9 @@ const WatchPageDetails = () => {
         sourceEvents: Array.isArray(response.sourceEvents)
           ? response.sourceEvents
           : [],
+        followUpQuestions: Array.isArray(response.followUpQuestions)
+          ? response.followUpQuestions
+          : [],
       });
       setAiQuestion("");
     } catch (requestError) {
