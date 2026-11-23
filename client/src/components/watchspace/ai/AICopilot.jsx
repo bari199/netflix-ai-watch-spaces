@@ -12,6 +12,17 @@ import {
   WandSparkles,
 } from "lucide-react";
 
+const formatTimelineTime = (seconds) => {
+  const value = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const remainingSeconds = value % 60;
+  const clock = [minutes, remainingSeconds]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+  return hours > 0 ? `${hours}:${clock}` : clock;
+};
+
 export default function AICopilot({
   aiSuggestedQuestions = [],
   aiQuestion,
@@ -177,6 +188,11 @@ export default function AICopilot({
                           <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-sky-300/70">
                             Reference {index + 1}
                           </p>
+                          {Number.isFinite(Number(timelineEvent?.startTime)) && (
+                            <p className="mb-1 text-[9px] font-medium text-white/35">
+                              At {formatTimelineTime(timelineEvent.startTime)}
+                            </p>
+                          )}
                           <p className="whitespace-pre-wrap break-words text-[10px] leading-relaxed text-white/55">
                             {typeof eventText === "string" && eventText.trim()
                               ? eventText
