@@ -16,6 +16,7 @@ const requiredEnvVariables = [
   "FACEBOOK_APP_ID",
   "FACEBOOK_APP_SECRET",
   "FACEBOOK_CALLBACK_URL",
+  "ACCESS_TOKEN_SECRET",
 ];
 
 for (const variable of requiredEnvVariables) {

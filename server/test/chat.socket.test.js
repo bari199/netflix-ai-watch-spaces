@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: "../.env" });
 
 const SERVER_URL = "http://localhost:5000";
-const WATCH_SPACE_ID = "6afda416ecfdba5cdc206371";
+const WATCH_SPACE_ID = process.env.WATCH_SPACE_TEST_ID;
 
 const HOST_TOKEN = process.env.HOST_SOCKET_TEST_TOKEN;
 const VIEWER_TOKEN = process.env.VIEWER_SOCKET_TEST_TOKEN;
@@ -41,6 +41,7 @@ const waitForEvent = (socket, eventName) =>
   });
 
 test("Chat system: message, history, typing and reactions", async (t) => {
+  assert.ok(WATCH_SPACE_ID, "WATCH_SPACE_TEST_ID is missing");
   assert.ok(HOST_TOKEN, "HOST_SOCKET_TEST_TOKEN is missing");
   assert.ok(VIEWER_TOKEN, "VIEWER_SOCKET_TEST_TOKEN is missing");
 
@@ -52,7 +53,6 @@ test("Chat system: message, history, typing and reactions", async (t) => {
     viewer.disconnect();
   });
 
-  // Step 1: Join WatchSpace
   const joinRoom = async (socket) => {
     const result = await emitWithAck(socket, "room.join", {
       watchSpaceId: WATCH_SPACE_ID,
@@ -64,7 +64,6 @@ test("Chat system: message, history, typing and reactions", async (t) => {
   await joinRoom(host);
   await joinRoom(viewer);
 
-  // Step 2: Send message
   const messageEventPromise = waitForEvent(viewer, "chat.message.new");
 
   const sendResult = await emitWithAck(host, "chat.message.send", {
@@ -80,7 +79,6 @@ test("Chat system: message, history, typing and reactions", async (t) => {
 
   console.log("PASS: Real-time message delivery");
 
-  // Step 3: Retrieve message history
   const historyResult = await emitWithAck(viewer, "chat.history.get", {
     watchSpaceId: WATCH_SPACE_ID,
     limit: 10,
@@ -96,7 +94,6 @@ test("Chat system: message, history, typing and reactions", async (t) => {
 
   console.log("PASS: Chat history retrieval");
 
-  // Step 4: Typing indicator
   const typingEventPromise = waitForEvent(viewer, "chat.typing.update");
 
   host.emit("chat.typing", {
@@ -110,7 +107,6 @@ test("Chat system: message, history, typing and reactions", async (t) => {
 
   console.log("PASS: Typing indicator");
 
-  // Step 5: Add first emoji reaction
   const messageId = sendResult.message._id;
   const hostUserId = sendResult.message.sender._id.toString();
 
@@ -134,7 +130,6 @@ test("Chat system: message, history, typing and reactions", async (t) => {
 
   console.log("PASS: First emoji reaction");
 
-  // Step 6: Add a second different emoji
   const secondReactionEvent = waitForEvent(viewer, "chat.reaction.updated");
 
   const secondReactionResult = await emitWithAck(host, "chat.reaction.add", {
@@ -151,14 +146,11 @@ test("Chat system: message, history, typing and reactions", async (t) => {
   );
 
   assert.equal(hostReactions.length, 2);
-
   assert.ok(hostReactions.some((reaction) => reaction.emoji === "👍"));
-
   assert.ok(hostReactions.some((reaction) => reaction.emoji === "❤️"));
 
   console.log("PASS: Multiple emoji reactions");
 
-  // Step 7: Toggle the first emoji off
   const toggleEvent = waitForEvent(viewer, "chat.reaction.updated");
 
   const toggleResult = await emitWithAck(host, "chat.reaction.add", {
@@ -179,7 +171,6 @@ test("Chat system: message, history, typing and reactions", async (t) => {
 
   console.log("PASS: Emoji reaction toggle");
 
-  // Step 8: Verify another user's reaction is independent
   const viewerReactionEvent = waitForEvent(host, "chat.reaction.updated");
 
   const viewerReactionResult = await emitWithAck(viewer, "chat.reaction.add", {

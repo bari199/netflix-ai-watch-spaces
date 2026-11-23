@@ -7,10 +7,12 @@ import connectDB from "../src/config/db.js";
 dotenv.config({ path: "../.env" });
 
 const accessToken = process.env.VIEWER_SOCKET_TEST_TOKEN;
-const watchSpaceId = "6afda416ecfdba5cdc206371";
+const watchSpaceId = process.env.WATCH_SPACE_TEST_ID;
 
-if (!accessToken) {
-  console.error("SOCKET_TEST_TOKEN is missing");
+if (!accessToken || !watchSpaceId) {
+  console.error(
+    "FAIL: VIEWER_SOCKET_TEST_TOKEN or WATCH_SPACE_TEST_ID is missing",
+  );
   process.exit(1);
 }
 
@@ -139,7 +141,7 @@ socket.on("connect_error", async (error) => {
 
 const startTest = async () => {
   try {
-    await connectDB();
+    await connectDB({ useTestDatabase: true });
     console.log("PASS: Test MongoDB connected");
 
     socket.connect();
@@ -150,4 +152,3 @@ const startTest = async () => {
 };
 
 startTest();
-

@@ -8,8 +8,7 @@ dotenv.config({ path: "../.env" });
 
 const HOST_TOKEN = process.env.HOST_SOCKET_TEST_TOKEN;
 const VIEWER_TOKEN = process.env.VIEWER_SOCKET_TEST_TOKEN;
-
-const WATCH_SPACE_ID = "6afda416ecfdba5cdc206371";
+const WATCH_SPACE_ID = process.env.WATCH_SPACE_TEST_ID;
 
 const SERVER_URL = "http://localhost:5000";
 const HOST_POSITION = 200;
@@ -89,12 +88,14 @@ let hostSocket;
 let viewerSocket;
 
 try {
-  if (!HOST_TOKEN || !VIEWER_TOKEN) {
-    throw new Error("Host or Viewer test token missing from .env");
+  if (!HOST_TOKEN || !VIEWER_TOKEN || !WATCH_SPACE_ID) {
+    throw new Error(
+      "Host token, Viewer token or WATCH_SPACE_TEST_ID missing from .env",
+    );
   }
 
-  await connectDB();
-  console.log("PASS: MongoDB connected");
+  await connectDB({ useTestDatabase: true });
+  console.log("PASS: Test MongoDB connected");
 
   hostSocket = await connectSocket(HOST_TOKEN);
   console.log("PASS: Host socket connected");
@@ -135,6 +136,10 @@ try {
 
   const watchSpace = await WatchSpace.findById(WATCH_SPACE_ID);
 
+  if (!watchSpace) {
+    throw new Error("Test WatchSpace not found in test database");
+  }
+
   if (watchSpace.playback.state !== "paused") {
     throw new Error("Database playback state is not paused");
   }
@@ -155,4 +160,3 @@ try {
 
   await mongoose.disconnect();
 }
-
