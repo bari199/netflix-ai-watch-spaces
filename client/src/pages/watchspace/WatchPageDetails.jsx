@@ -434,7 +434,7 @@ const WatchPageDetails = () => {
     return () => {
       active = false;
     };
-  }, [watchSpaceId, isParticipant, isEnded, aiSuggestionAnchor]);
+  }, [watchSpaceId, isHost, isParticipant, isEnded, aiSuggestionAnchor]);
   const currentAiError =
     aiError?.watchSpaceId === watchSpaceId ? aiError.message : "";
   const aiSourceEvents = (
