@@ -12,6 +12,7 @@ import watchSpaceRoutes from "./routes/watchSpace.routes.js";
 import recommendationRoutes from "./routes/recommendation.routes.js";
 import interactionRoutes from "./routes/interaction.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use("/api/watch-spaces", watchSpaceRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/interactions", interactionRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
