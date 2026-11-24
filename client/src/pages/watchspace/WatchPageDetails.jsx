@@ -252,6 +252,8 @@ const WatchPageDetails = () => {
     setAiError(null);
     setIsAskingAI(false);
     setAiSuggestedQuestions([]);
+    setAiSuggestionsNextOffset(null);
+    setAiSuggestionsHasMore(false);
     setIsLoadingAISuggestions(false);
     aiSubmittingRef.current = false;
 
