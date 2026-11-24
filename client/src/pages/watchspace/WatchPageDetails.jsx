@@ -1937,7 +1937,7 @@ const WatchPageDetails = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#080808] text-white">
+    <div className="watchspace-page min-h-screen bg-[#080808] text-white">
       <WatchRoomNavbar user={user} />
 
       <main className="watchspace-main mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-7">
