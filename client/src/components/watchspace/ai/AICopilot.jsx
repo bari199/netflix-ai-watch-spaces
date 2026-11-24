@@ -24,12 +24,13 @@ const normalizeQuestions = (questions = []) =>
         label: item.label || item.question,
       };
     })
-    .filter(Boolean)
-    .slice(0, 4);
+    .filter(Boolean);
 
 export default function AICopilot({
   aiSuggestedQuestions = [],
   isLoadingAISuggestions = false,
+  hasMoreAISuggestions = false,
+  onLoadMoreAISuggestions,
   aiQuestion = "",
   setAiQuestion,
   handleAskAI,
@@ -230,6 +231,16 @@ export default function AICopilot({
               onSelect={submitQuestion}
               isLoading={isLoadingAISuggestions}
             />
+            {hasMoreAISuggestions && (
+              <button
+                type="button"
+                onClick={onLoadMoreAISuggestions}
+                disabled={isLoadingAISuggestions}
+                className="mt-3 w-full rounded-lg border border-white/10 px-3 py-2 text-[10px] font-medium text-white/65 transition hover:border-sky-300/30 hover:text-sky-200 disabled:opacity-40"
+              >
+                {isLoadingAISuggestions ? "Loading..." : "Load more questions"}
+              </button>
+            )}
           </div>
         )}
 
