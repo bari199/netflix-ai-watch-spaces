@@ -70,3 +70,19 @@ export const getAvatar = async (req, res) => {
     });
   }
 };
+
+export const getAvatarById = async (req, res) => {
+  try {
+    const avatar = await getUserAvatar(req.params.userId);
+
+    res.setHeader("Content-Type", avatar.contentType);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+
+    avatar.body.pipe(res);
+  } catch (error) {
+    return res.status(404).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

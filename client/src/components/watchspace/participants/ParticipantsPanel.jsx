@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import api from "../../../api/axios.js";
 import {
   Users,
   Crown,
@@ -10,6 +12,65 @@ import {
   ShieldCheck,
   ArrowRightLeft,
 } from "lucide-react";
+
+const ParticipantAvatar = ({ userId, name, avatar }) => {
+  const [imageUrl, setImageUrl] = useState(() =>
+    typeof avatar === "string" && /^(https?:|data:|blob:)/i.test(avatar)
+      ? avatar
+      : null,
+  );
+
+  useEffect(() => {
+    let objectUrl;
+    let cancelled = false;
+
+    if (!userId || !avatar || /^(https?:|data:|blob:)/i.test(avatar)) {
+      setImageUrl(
+        typeof avatar === "string" && /^(https?:|data:|blob:)/i.test(avatar)
+          ? avatar
+          : null,
+      );
+      return undefined;
+    }
+
+    setImageUrl(null);
+
+    api
+      .get(`/users/${userId}/avatar`, { responseType: "blob" })
+      .then(({ data }) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(data);
+        setImageUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setImageUrl(null);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [userId, avatar]);
+
+  const initials = (name || "U").trim().charAt(0).toUpperCase() || "U";
+
+  if (!imageUrl) {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-red-600 to-red-950 text-sm font-bold text-white">
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={name || "Participant"}
+      onError={() => setImageUrl(null)}
+      className="h-9 w-9 shrink-0 rounded-full border border-white/10 object-cover"
+    />
+  );
+};
 
 const ParticipantsPanel = ({
   participants = [],
@@ -27,8 +88,6 @@ const ParticipantsPanel = ({
 }) => {
   const getParticipantName = (user) =>
     user?.name || user?.fullName || "Unknown User";
-
-  const getAvatar = (user) => user?.avatar || user?.avatarUrl;
 
   const isParticipantOnline = (participantId) =>
     onlineParticipants.some(
@@ -110,8 +169,6 @@ const ParticipantsPanel = ({
               const isOnline = isParticipantOnline(participantId);
               const participantName = getParticipantName(participantUser);
 
-              const avatar = getAvatar(participantUser);
-
               const showHostActions =
                 isHost &&
                 !participantIsHost &&
@@ -130,17 +187,13 @@ const ParticipantsPanel = ({
                 >
                   {/* User information */}
                   <div className="flex min-w-0 items-center gap-2.5">
-                    {avatar ? (
-                      <img
-                        src={avatar}
-                        alt={participantName}
-                        className="h-9 w-9 shrink-0 rounded-full border border-white/10 object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-red-600 to-red-950 text-sm font-bold text-white">
-                        {participantName.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <ParticipantAvatar
+                      userId={participantId}
+                      name={participantName}
+                      avatar={
+                        participantUser?.avatar || participantUser?.avatarUrl
+                      }
+                    />
 
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">

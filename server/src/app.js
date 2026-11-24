@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import passport from "./config/passport.js";
@@ -24,12 +25,14 @@ app.use(
     credentials: true,
   }),
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use(passport.initialize());
 
+// API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/titles", titleRoutes);
@@ -38,6 +41,7 @@ app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/interactions", interactionRoutes);
 app.use("/api/analytics", analyticsRoutes);
 
+// Health check
 app.get("/api/health", (req, res) => {
   const dbStatus =
     mongoose.connection.readyState === 1 ? "connected" : "disconnected";
@@ -52,6 +56,32 @@ app.get("/api/health", (req, res) => {
       database: dbStatus,
     },
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Global error handling middleware
+app.use((error, req, res, next) => {
+  console.error("\n========== API ERROR ==========");
+  console.error("Method:", req.method);
+  console.error("URL:", req.originalUrl);
+  console.error("Message:", error.message);
+  console.error("Stack:", error.stack);
+  console.error("================================\n");
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  const statusCode =
+    Number.isInteger(error.statusCode) &&
+    error.statusCode >= 400 &&
+    error.statusCode <= 599
+      ? error.statusCode
+      : 500;
+
+  res.status(statusCode).json({
+    success: false,
+    message: statusCode >= 500 ? "Internal server error" : error.message,
   });
 });
 

@@ -63,11 +63,13 @@ const WatchPageDetails = () => {
   const [typingUsers, setTypingUsers] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiResponse, setAiResponse] = useState(null);
   const [aiError, setAiError] = useState(null);
   const [isAskingAI, setIsAskingAI] = useState(false);
   const [aiSuggestedQuestions, setAiSuggestedQuestions] = useState([]);
+  const [isLoadingAISuggestions, setIsLoadingAISuggestions] = useState(false);
 
   const [onlineParticipants, setOnlineParticipants] = useState([]);
   const [connectionLatency, setConnectionLatency] = useState(null);
@@ -84,6 +86,7 @@ const WatchPageDetails = () => {
   const [voteMessage, setVoteMessage] = useState("");
   const [voteLoading, setVoteLoading] = useState(false);
   const [unreadVoteCount, setUnreadVoteCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [triviaCards, setTriviaCards] = useState([]);
   const [subtitleSelection, setSubtitleSelection] = useState(null);
   const [playerStarted, setPlayerStarted] = useState(false);
@@ -153,6 +156,7 @@ const WatchPageDetails = () => {
   const socketRef = useRef(null);
   const aiSubmittingRef = useRef(false);
   const seenTriviaEventIdsRef = useRef(new Set());
+  const seenChatMessageIdsRef = useRef(new Set());
   const applyingRemoteUpdateRef = useRef(false);
   const qualityIntervalRef = useRef(null);
   const fetchRequestIdRef = useRef(0);
@@ -234,6 +238,8 @@ const WatchPageDetails = () => {
     setChatMessages([]);
     setTypingUsers([]);
     setChatInput("");
+    setUnreadChatCount(0);
+    seenChatMessageIdsRef.current.clear();
     setOnlineParticipants([]);
     setConnectionLatency(null);
     setConnectionQuality("checking");
@@ -243,6 +249,8 @@ const WatchPageDetails = () => {
     setAiResponse(null);
     setAiError(null);
     setIsAskingAI(false);
+    setAiSuggestedQuestions([]);
+    setIsLoadingAISuggestions(false);
     aiSubmittingRef.current = false;
 
     setActiveVote(null);
@@ -336,6 +344,52 @@ const WatchPageDetails = () => {
 
   const isEnded = watchSpace?.status === "ended";
 
+  useEffect(() => {
+    if (
+      !watchSpaceId ||
+      !watchSpace?._id ||
+      (!isHost && !isParticipant) ||
+      isEnded
+    ) {
+      setAiSuggestedQuestions([]);
+      setIsLoadingAISuggestions(false);
+      return undefined;
+    }
+
+    let isActive = true;
+
+    const fetchAISuggestions = async () => {
+      setIsLoadingAISuggestions(true);
+
+      try {
+        const response = await getWatchSpaceAISuggestions(watchSpaceId);
+
+        if (!isActive) return;
+
+        setAiSuggestedQuestions(
+          Array.isArray(response?.suggestions)
+            ? response.suggestions.slice(0, 4)
+            : [],
+        );
+      } catch (suggestionError) {
+        if (!isActive) return;
+
+        console.error("Failed to load AI suggestions:", suggestionError);
+        setAiSuggestedQuestions([]);
+      } finally {
+        if (isActive) {
+          setIsLoadingAISuggestions(false);
+        }
+      }
+    };
+
+    fetchAISuggestions();
+
+    return () => {
+      isActive = false;
+    };
+  }, [watchSpaceId, watchSpace?._id, isHost, isParticipant, isEnded]);
+
   const title = watchSpace?.title;
   const titleId = getUserId(title);
   const displayTitle = title?.name || title?.title || "Untitled Movie";
@@ -349,12 +403,6 @@ const WatchPageDetails = () => {
     .sort(
       (first, second) => Number(second.startTime) - Number(first.startTime),
     )[0];
-
-  const latestTimelineEvent = (title?.timeline || [])
-    .filter((event) => Number(event.startTime) <= playbackPosition)
-    .sort((first, second) => Number(second.startTime) - Number(first.startTime))[0];
-
-  const aiSuggestionAnchor = latestTimelineEvent?.eventId || "timeline-start";
 
   const subtitleVariants = (
     Array.isArray(title?.subtitleVariants) ? title.subtitleVariants : []
@@ -405,36 +453,6 @@ const WatchPageDetails = () => {
         ) || preferredSubtitle;
   const currentAiResponse =
     aiResponse?.watchSpaceId === watchSpaceId ? aiResponse : null;
-
-  useEffect(() => {
-    if (!watchSpaceId || (!isHost && !isParticipant) || isEnded) {
-      setAiSuggestedQuestions([]);
-      return undefined;
-    }
-
-    let active = true;
-    getWatchSpaceAISuggestions(watchSpaceId)
-      .then((response) => {
-        if (active) {
-          setAiSuggestedQuestions(
-            Array.isArray(response?.suggestions) ? response.suggestions : [],
-          );
-        }
-      })
-      .catch((requestError) => {
-        if (active) {
-          console.warn(
-            "Unable to load playback-aware AI suggestions:",
-            requestError?.message || requestError,
-          );
-          setAiSuggestedQuestions([]);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [watchSpaceId, isHost, isParticipant, isEnded, aiSuggestionAnchor]);
   const currentAiError =
     aiError?.watchSpaceId === watchSpaceId ? aiError.message : "";
   const aiSourceEvents = (
@@ -622,7 +640,14 @@ const WatchPageDetails = () => {
             if (!active) return;
 
             if (chatResponse?.success) {
-              setChatMessages(chatResponse.messages || []);
+              const historyMessages = chatResponse.messages || [];
+              seenChatMessageIdsRef.current = new Set(
+                historyMessages
+                  .map((message) => message?._id)
+                  .filter(Boolean)
+                  .map(String),
+              );
+              setChatMessages(historyMessages);
             } else {
               console.error(
                 "Failed to load chat history:",
@@ -857,19 +882,43 @@ const WatchPageDetails = () => {
         return;
       }
 
-      setChatMessages((previousMessages) => {
-        const incomingMessage = data.payload;
-        const messageId = incomingMessage._id;
+      const incomingMessage = data.payload;
+      const messageId = incomingMessage?._id ? String(incomingMessage._id) : "";
 
-        if (
-          messageId &&
-          previousMessages.some((message) => message._id === messageId)
-        ) {
-          return previousMessages;
-        }
+      // Ignore duplicate socket deliveries before updating chat or notifications.
+      if (messageId && seenChatMessageIdsRef.current.has(messageId)) {
+        return;
+      }
 
-        return [...previousMessages, incomingMessage];
-      });
+      if (messageId) {
+        seenChatMessageIdsRef.current.add(messageId);
+      }
+
+      setChatMessages((previousMessages) => [
+        ...previousMessages,
+        incomingMessage,
+      ]);
+
+      // Only messages from other participants should notify this user.
+      const sender =
+        incomingMessage?.sender ||
+        incomingMessage?.user ||
+        incomingMessage?.author ||
+        incomingMessage?.createdBy ||
+        incomingMessage?.senderId ||
+        incomingMessage?.userId;
+      const senderId = getUserId(sender);
+
+      if (!senderId || senderId === currentUserId) {
+        return;
+      }
+
+      if (activeSidebarTabRef.current !== "chat") {
+        setUnreadChatCount((count) => count + 1);
+      }
+
+      playVoteNotification();
+      triggerVoteVibration();
     };
 
     // Typing Indicator
@@ -905,6 +954,43 @@ const WatchPageDetails = () => {
           (typingUser) => getUserId(typingUser) !== typingUserId,
         );
       });
+    };
+
+    // Message edit/delete updates are broadcast to every participant.
+    const handleChatMessageUpdated = (data) => {
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !data?.payload
+      ) {
+        return;
+      }
+
+      const updatedMessage = data.payload;
+      setChatMessages((previousMessages) =>
+        previousMessages.map((message) =>
+          String(message._id) === String(updatedMessage._id)
+            ? updatedMessage
+            : message,
+        ),
+      );
+    };
+
+    const handleChatMessageDeleted = (data) => {
+      if (
+        !active ||
+        String(data?.watchSpaceId) !== String(watchSpaceId) ||
+        !data?.payload?.messageId
+      ) {
+        return;
+      }
+
+      const deletedMessageId = String(data.payload.messageId);
+      setChatMessages((previousMessages) =>
+        previousMessages.filter(
+          (message) => String(message._id) !== deletedMessageId,
+        ),
+      );
     };
 
     // Emoji Reaction Update
@@ -1074,6 +1160,8 @@ const WatchPageDetails = () => {
     socket.on("presence.updated", handlePresenceUpdate);
 
     socket.on("chat.message.new", handleNewChatMessage);
+    socket.on("chat.message.updated", handleChatMessageUpdated);
+    socket.on("chat.message.deleted", handleChatMessageDeleted);
 
     socket.on("chat.typing.update", handleTypingUpdate);
 
@@ -1139,6 +1227,8 @@ const WatchPageDetails = () => {
       socket.off("presence.updated", handlePresenceUpdate);
 
       socket.off("chat.message.new", handleNewChatMessage);
+      socket.off("chat.message.updated", handleChatMessageUpdated);
+      socket.off("chat.message.deleted", handleChatMessageDeleted);
 
       socket.off("chat.typing.update", handleTypingUpdate);
 
@@ -1466,10 +1556,10 @@ const WatchPageDetails = () => {
     );
   };
 
-  const handleAskAI = async (event) => {
-    event.preventDefault();
+  const handleAskAI = async (input) => {
+    if (typeof input !== "string") input?.preventDefault?.();
 
-    const question = aiQuestion.trim();
+    const question = (typeof input === "string" ? input : aiQuestion).trim();
     if (
       !question ||
       !watchSpaceId ||
@@ -1493,6 +1583,8 @@ const WatchPageDetails = () => {
 
       setAiResponse({
         watchSpaceId,
+        requestId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        question,
         answer: response.answer,
         sourceEvents: Array.isArray(response.sourceEvents)
           ? response.sourceEvents
@@ -1539,6 +1631,73 @@ const WatchPageDetails = () => {
       },
     );
   };
+
+  // Edit one of the current user's chat messages.
+  const handleEditChatMessage = (messageId, message) =>
+    new Promise((resolve) => {
+      const socket = socketRef.current;
+      const normalizedMessage = String(message || "").trim();
+
+      if (!socket?.connected || !messageId || !normalizedMessage || isEnded) {
+        setError("Chat connection is unavailable.");
+        resolve(false);
+        return;
+      }
+
+      socket.emit(
+        "chat.message.edit",
+        { watchSpaceId, messageId, message: normalizedMessage },
+        (response) => {
+          if (!response?.success) {
+            setError(response?.message || "Failed to edit message.");
+            resolve(false);
+            return;
+          }
+
+          if (response.message) {
+            setChatMessages((previousMessages) =>
+              previousMessages.map((item) =>
+                String(item._id) === String(messageId)
+                  ? response.message
+                  : item,
+              ),
+            );
+          }
+          resolve(true);
+        },
+      );
+    });
+
+  // Delete one of the current user's chat messages.
+  const handleDeleteChatMessage = (messageId) =>
+    new Promise((resolve) => {
+      const socket = socketRef.current;
+
+      if (!socket?.connected || !messageId || isEnded) {
+        setError("Chat connection is unavailable.");
+        resolve(false);
+        return;
+      }
+
+      socket.emit(
+        "chat.message.delete",
+        { watchSpaceId, messageId },
+        (response) => {
+          if (!response?.success) {
+            setError(response?.message || "Failed to delete message.");
+            resolve(false);
+            return;
+          }
+
+          setChatMessages((previousMessages) =>
+            previousMessages.filter(
+              (item) => String(item._id) !== String(messageId),
+            ),
+          );
+          resolve(true);
+        },
+      );
+    });
 
   // Common Action Handler
   const handleAction = async (action) => {
@@ -1839,6 +1998,14 @@ const WatchPageDetails = () => {
                     >
                       <span className="relative inline-flex">
                         <Icon size={17} />
+                        {id === "chat" && unreadChatCount > 0 && (
+                          <span
+                            aria-label={`${unreadChatCount} unread chat message${unreadChatCount === 1 ? "" : "s"}`}
+                            className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full border border-[#101010] bg-red-600 px-1 text-[9px] font-extrabold leading-none text-white shadow-lg"
+                          >
+                            {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                          </span>
+                        )}
                         {id === "vote" && unreadVoteCount > 0 && (
                           <span
                             aria-label={`${unreadVoteCount} new group vote${unreadVoteCount === 1 ? "" : "s"}`}
@@ -1868,6 +2035,8 @@ const WatchPageDetails = () => {
                     currentUserId={currentUserId}
                     getUserId={getUserId}
                     handleChatReaction={handleChatReaction}
+                    handleEditChatMessage={handleEditChatMessage}
+                    handleDeleteChatMessage={handleDeleteChatMessage}
                     typingUsers={typingUsers}
                     chatInput={chatInput}
                     handleChatInputChange={handleChatInputChange}
@@ -1978,9 +2147,11 @@ const WatchPageDetails = () => {
                 ((isHost || isParticipant) && !isEnded ? (
                   <AICopilot
                     aiSuggestedQuestions={aiSuggestedQuestions}
+                    isLoadingAISuggestions={isLoadingAISuggestions}
                     aiQuestion={aiQuestion}
                     setAiQuestion={setAiQuestion}
                     handleAskAI={handleAskAI}
+                    onAskQuestion={handleAskAI}
                     isAskingAI={isAskingAI}
                     currentAiError={currentAiError}
                     currentAiResponse={currentAiResponse}

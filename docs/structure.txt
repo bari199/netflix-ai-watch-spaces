@@ -1,0 +1,17 @@
+
+netflix-ai-watch-spaces/
+│
+├── video/
+│   ├── avengers-endgame/
+│   └── avengers-infinity-war/
+│       ├── Avengers-Infinity-War.mp4
+│       └── thumbnail.jpg
+│
+└── server/
+    ├── scripts/
+    │   ├── seed-avengers-endgame.js
+    │   └── seed-avengers-infinity-war.js
+    │
+    └── seed-data/
+        ├── avengers-endgame.txt
+        └── avengers-infinity-war.txt

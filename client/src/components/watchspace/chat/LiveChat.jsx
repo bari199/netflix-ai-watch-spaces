@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { MessageCircle, Send, Users, Radio, Smile, X } from "lucide-react";
+import api from "../../../api/axios.js";
+import {
+  MessageCircle,
+  Send,
+  Users,
+  Radio,
+  Smile,
+  X,
+  Pencil,
+  Trash2,
+  Check,
+  XCircle,
+} from "lucide-react";
 
 const CHAT_EMOJIS = [
   "😀",
@@ -35,6 +47,8 @@ export default function LiveChat({
   getUserId,
   REACTION_EMOJIS = ["❤️", "😂", "🔥", "👏", "😮"],
   handleChatReaction,
+  handleEditChatMessage,
+  handleDeleteChatMessage,
   typingUsers = [],
   chatInput,
   handleChatInputChange,
@@ -46,6 +60,90 @@ export default function LiveChat({
   const internalEndRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState("");
+  const [editDraft, setEditDraft] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [avatarUrls, setAvatarUrls] = useState({});
+  const avatarUrlsRef = useRef({});
+  const requestedAvatarIdsRef = useRef(new Set());
+
+  // Avatar objects are private in MinIO, so load them through the authenticated
+  // Axios instance rather than using the stored object key as an image URL.
+  useEffect(() => {
+    let active = true;
+
+    const loadSenderAvatar = async (senderId) => {
+      if (!senderId || requestedAvatarIdsRef.current.has(senderId)) return;
+      requestedAvatarIdsRef.current.add(senderId);
+
+      try {
+        const response = await api.get(`/users/${senderId}/avatar`, {
+          responseType: "blob",
+        });
+        if (!active) return;
+
+        const objectUrl = URL.createObjectURL(response.data);
+        avatarUrlsRef.current[senderId] = objectUrl;
+        setAvatarUrls((previous) => ({ ...previous, [senderId]: objectUrl }));
+      } catch (error) {
+        // Missing avatars should gracefully fall back to the user's initials.
+        requestedAvatarIdsRef.current.delete(senderId);
+      }
+    };
+
+    chatMessages.forEach((message) => {
+      const sender = message?.sender || message?.user;
+      const storedAvatar = sender?.avatar || sender?.avatarUrl;
+      const senderId = String(sender?._id || sender?.id || "");
+      if (storedAvatar && senderId) loadSenderAvatar(senderId);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [chatMessages]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(avatarUrlsRef.current).forEach((url) =>
+        URL.revokeObjectURL(url),
+      );
+      avatarUrlsRef.current = {};
+    };
+  }, []);
+
+  const startEditingMessage = (message) => {
+    setEditingMessageId(String(message?._id || ""));
+    setEditDraft(message?.message || message?.content || message?.text || "");
+  };
+
+  const cancelEditingMessage = () => {
+    setEditingMessageId("");
+    setEditDraft("");
+    setIsSavingEdit(false);
+  };
+
+  const saveEditedMessage = async (event, messageId) => {
+    event.preventDefault();
+    const nextMessage = editDraft.trim();
+    if (!nextMessage || !messageId || isSavingEdit) return;
+
+    setIsSavingEdit(true);
+    try {
+      const success = await handleEditChatMessage?.(messageId, nextMessage);
+      if (success) cancelEditingMessage();
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const deleteMessage = async (messageId) => {
+    if (!messageId) return;
+    const confirmed = window.confirm(
+      "Delete this message? This cannot be undone.",
+    );
+    if (confirmed) await handleDeleteChatMessage?.(messageId);
+  };
 
   useEffect(() => {
     const target = chatMessagesEndRef?.current || internalEndRef.current;
@@ -140,7 +238,10 @@ export default function LiveChat({
               sender?.name || sender?.fullName || "Unknown User";
             const messageText =
               message.message || message.content || message.text || "";
-            const avatar = sender?.avatar || sender?.avatarUrl;
+            const senderAvatarId = String(
+              getUserId?.(sender) || sender?._id || sender?.id || "",
+            );
+            const avatar = avatarUrls[senderAvatarId];
             const reactions = Array.isArray(message.reactions)
               ? message.reactions
               : [];
@@ -179,9 +280,76 @@ export default function LiveChat({
                     )}
                   </div>
 
-                  <p className="max-w-full whitespace-pre-wrap break-words text-[12px] leading-[1.55] text-white/90">
-                    {messageText}
-                  </p>
+                  {editingMessageId === String(message._id) ? (
+                    <form
+                      onSubmit={(event) =>
+                        saveEditedMessage(event, message._id)
+                      }
+                      className="mt-1 flex w-full max-w-full items-center gap-1.5"
+                    >
+                      <input
+                        autoFocus
+                        value={editDraft}
+                        onChange={(event) => setEditDraft(event.target.value)}
+                        maxLength={2000}
+                        aria-label="Edit chat message"
+                        className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black px-2.5 py-2 text-xs text-white outline-none focus:border-white/40"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!editDraft.trim() || isSavingEdit}
+                        aria-label="Save edited message"
+                        title="Save"
+                        className="rounded-md p-1.5 text-green-400 hover:bg-green-400/10 disabled:opacity-40"
+                      >
+                        <Check size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditingMessage}
+                        aria-label="Cancel editing"
+                        title="Cancel"
+                        className="rounded-md p-1.5 text-white/50 hover:bg-white/10"
+                      >
+                        <XCircle size={15} />
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <p className="max-w-full whitespace-pre-wrap break-words text-[12px] leading-[1.55] text-white/90">
+                        {messageText}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        {message.editedAt && (
+                          <span className="text-[9px] italic text-white/35">
+                            Edited
+                          </span>
+                        )}
+                        {isCurrentUser && message._id && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => startEditingMessage(message)}
+                              aria-label="Edit message"
+                              title="Edit message"
+                              className="rounded-md p-1 text-white/35 transition hover:bg-white/10 hover:text-white/80"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteMessage(message._id)}
+                              aria-label="Delete message"
+                              title="Delete message"
+                              className="rounded-md p-1 text-white/35 transition hover:bg-red-500/10 hover:text-red-400"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {REACTION_EMOJIS.map((emoji) => {
