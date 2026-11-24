@@ -7,7 +7,7 @@ const AISuggestedQuestions = ({
   isLoading = false,
   onSelect,
 }) => {
-  const visibleQuestions = questions.slice(0, 4);
+  const visibleQuestions = questions;
 
   if (!visibleQuestions.length && !isLoading) return null;
 
