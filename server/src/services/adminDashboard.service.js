@@ -195,6 +195,7 @@ export const getAdminDashboardOverview = async (now = new Date()) => {
     ChatMessage.countDocuments({}),
     WatchSpace.aggregate([
       { $unwind: "$participants" },
+      { $match: { "participants.user": { $ne: null } } },
       {
         $group: {
           _id: null,
