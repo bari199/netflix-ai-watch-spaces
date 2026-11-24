@@ -153,6 +153,11 @@
 
 /* Watch Space: mobile landscape cinema layout */
 @media (orientation: landscape) and (max-height: 600px) and (max-width: 950px) {
+  .watchspace-page > nav,
+  .watchspace-page > header {
+    display: none;
+  }
+
   .watchspace-main {
     width: 100%;
     max-width: none;
@@ -254,9 +259,9 @@
   }
 
   .watchspace-panel {
-    position: fixed;
+    position: absolute;
     left: 50%;
-    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 58px);
+    bottom: calc(100% + 8px);
     z-index: 61;
     width: min(420px, calc(100vw - 20px));
     max-height: min(62dvh, 360px);
