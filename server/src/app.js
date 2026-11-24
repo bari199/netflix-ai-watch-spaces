@@ -63,12 +63,12 @@ app.get("/api/health", (req, res) => {
 
 // Global error handling middleware
 app.use((error, req, res, next) => {
-  console.error("\\n========== API ERROR ==========");
+  console.error("\n========== API ERROR ==========");
   console.error("Method:", req.method);
   console.error("URL:", req.originalUrl);
   console.error("Message:", error.message);
   console.error("Stack:", error.stack);
-  console.error("================================\\n");
+  console.error("================================\n");
 
   if (res.headersSent) {
     return next(error);
