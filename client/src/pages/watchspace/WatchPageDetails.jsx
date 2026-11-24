@@ -1940,7 +1940,7 @@ const WatchPageDetails = () => {
     <div className="min-h-screen bg-[#080808] text-white">
       <WatchRoomNavbar user={user} />
 
-      <main className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-7">
+      <main className="watchspace-main mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-7">
         <div className="mb-3 space-y-2">
           <ErrorAlert error={error} onDismiss={() => setError("")} />
           <HostDisconnectedAlert hostDisconnected={hostDisconnected} />
@@ -1951,10 +1951,10 @@ const WatchPageDetails = () => {
           />
         </div>
 
-        <section className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]">
+        <section className="watchspace-layout grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]">
           {/* Main column: cinematic player */}
           <div className="flex min-w-0 flex-col gap-4">
-            <div className="min-w-0 overflow-hidden rounded-2xl">
+            <div className="watchspace-player-frame min-w-0 overflow-hidden rounded-2xl">
               {isPlayerVisible ? (
                 <CinematicPlayer
                   videoRef={videoRef}
@@ -1999,7 +1999,7 @@ const WatchPageDetails = () => {
           </div>
 
           {/* Right sidebar: one selected panel at a time */}
-          <aside className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#101010] shadow-2xl shadow-black/30">
+          <aside className="watchspace-tools min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#101010] shadow-2xl shadow-black/30">
             <div className="border-b border-white/10 p-2">
               <div
                 role="tablist"
@@ -2059,7 +2059,7 @@ const WatchPageDetails = () => {
               id={`watchspace-panel-${activeSidebarTab}`}
               role="tabpanel"
               aria-labelledby={`watchspace-tab-${activeSidebarTab}`}
-              className="min-w-0 p-3 sm:p-4"
+              className="watchspace-panel min-w-0 p-3 sm:p-4"
             >
               {activeSidebarTab === "chat" &&
                 (isParticipant && !isEnded ? (
