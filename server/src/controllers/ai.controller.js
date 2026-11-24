@@ -8,7 +8,7 @@ const getIdString = (value) => {
     return "";
   }
 
-  return String(value._id ?? value);
+  return String(value?._id ?? value);
 };
 
 export const askWatchSpaceAIController = async (req, res) => {
@@ -24,7 +24,7 @@ export const askWatchSpaceAIController = async (req, res) => {
   }
 
   try {
-    const watchSpace = await WatchSpace.findById(req.params.watchSpaceId);
+    const watchSpace = await WatchSpace.findById(watchSpaceId);
 
     if (!watchSpace) {
       return res.status(404).json({
@@ -43,6 +43,7 @@ export const askWatchSpaceAIController = async (req, res) => {
     }
 
     const isHost = getIdString(watchSpace.host) === userId;
+
     const isParticipant = watchSpace.participants.some(
       (participant) => getIdString(participant.user) === userId,
     );
@@ -73,21 +74,20 @@ export const askWatchSpaceAIController = async (req, res) => {
       generatedAt: result.generatedAt,
     });
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "watchspace.ai_qa.controller_error",
-        requestId,
-        watchSpaceId,
-        rejectionCategory: error?.aiRejectionCategory || "request_failed",
-      }),
-    );
+    console.error("[WatchSpace AI Q&A Controller Error]", {
+      requestId,
+      watchSpaceId,
+      rejectionCategory: error?.aiRejectionCategory || "request_failed",
+      message: error?.message,
+      stack: error?.stack,
+    });
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",
     });
   }
 };
-
 
 export const getWatchSpaceAISuggestionsController = async (req, res) => {
   const watchSpaceId = req.params.watchSpaceId;
@@ -112,6 +112,7 @@ export const getWatchSpaceAISuggestionsController = async (req, res) => {
     }
 
     const isHost = getIdString(watchSpace.host) === userId;
+
     const isParticipant = watchSpace.participants.some(
       (participant) => getIdString(participant.user) === userId,
     );
@@ -119,18 +120,44 @@ export const getWatchSpaceAISuggestionsController = async (req, res) => {
     if (!isHost && !isParticipant) {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to view AI suggestions in this WatchSpace",
+        message:
+          "You are not authorized to view AI suggestions in this WatchSpace",
       });
     }
 
-    const result = await getWatchSpaceAISuggestions(watchSpaceId);
+    const rawOffset = req.query.offset ?? "0";
+    const rawLimit = req.query.limit ?? "4";
+    const offset = Number(rawOffset);
+    const limit = Number(rawLimit);
+
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 4
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "offset must be a non-negative integer and limit must be between 1 and 4",
+      });
+    }
+
+    const result = await getWatchSpaceAISuggestions(watchSpaceId, {
+      offset,
+      limit,
+    });
 
     return res.status(200).json({
       currentTime: result.currentTime,
       suggestions: result.suggestions,
+      totalSuggestions: result.totalSuggestions,
+      nextOffset: result.nextOffset,
+      hasMore: result.hasMore,
     });
   } catch (error) {
     console.error("[WatchSpace AI Suggestions Error]", error?.message || error);
+
     return res.status(500).json({
       success: false,
       message: "Unable to load AI suggestions",

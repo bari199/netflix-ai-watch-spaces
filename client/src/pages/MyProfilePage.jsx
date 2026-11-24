@@ -383,19 +383,7 @@ function MyProfilePage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Local playback feedback preferences.
-  const [soundEnabled, setSoundEnabled] = useState(
-    () => localStorage.getItem("watchspace.soundEnabled") !== "false",
-  );
-  const [vibrationEnabled, setVibrationEnabled] = useState(
-    () => localStorage.getItem("watchspace.vibrationEnabled") !== "false",
-  );
-
-  useEffect(() => {
-    localStorage.setItem("watchspace.soundEnabled", String(soundEnabled));
-    localStorage.setItem("watchspace.vibrationEnabled", String(vibrationEnabled));
-  }, [soundEnabled, vibrationEnabled]);
-
+  // WatchSpace notification preferences are persisted on the user account.
   // Profile states
   const [name, setName] = useState(user?.name || "");
   const [avatarFile, setAvatarFile] = useState(null);
@@ -904,9 +892,12 @@ function MyProfilePage() {
           </span>
           <input
             type="checkbox"
-            checked={soundEnabled}
-            onChange={(event) => setSoundEnabled(event.target.checked)}
-            className="size-4 accent-[#e50914]"
+            checked={notificationPreferences.soundEnabled}
+            onChange={(event) =>
+              handleNotificationPreferenceChange("soundEnabled", event.target.checked)
+            }
+            disabled={notificationSaving}
+            className="size-4 accent-[#e50914] disabled:cursor-not-allowed disabled:opacity-50"
           />
         </label>
 
@@ -920,11 +911,18 @@ function MyProfilePage() {
           </span>
           <input
             type="checkbox"
-            checked={vibrationEnabled}
-            onChange={(event) => setVibrationEnabled(event.target.checked)}
-            className="size-4 accent-[#e50914]"
+            checked={notificationPreferences.vibrationEnabled}
+            onChange={(event) =>
+              handleNotificationPreferenceChange("vibrationEnabled", event.target.checked)
+            }
+            disabled={notificationSaving}
+            className="size-4 accent-[#e50914] disabled:cursor-not-allowed disabled:opacity-50"
           />
         </label>
+        {notificationError && (
+          <StatusMessage type="error">{notificationError}</StatusMessage>
+        )}
+        {notificationMessage && <StatusMessage>{notificationMessage}</StatusMessage>}
       </section>
 
       <div className="border-t border-white/10 pt-5">

@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/context/AuthContext";
+import api from "@/api/axios";
 
 import {
   Search,
   Bell,
-  UserRound,
   ChevronDown,
   Menu,
   X,
@@ -15,6 +15,58 @@ import {
   Users,
   UserPlus,
 } from "lucide-react";
+
+const NavbarAvatar = ({ user }) => {
+  const userId = String(user?._id || user?.id || "");
+  const [avatarUrl, setAvatarUrl] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+
+    setAvatarUrl("");
+
+    if (!userId || !user?.avatar) {
+      return () => {
+        active = false;
+      };
+    }
+
+    api
+      .get(`/users/${userId}/avatar`, { responseType: "blob" })
+      .then((response) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setAvatarUrl(objectUrl);
+      })
+      .catch((error) => {
+        if (active) {
+          console.warn("Navbar avatar could not be loaded:", error?.message);
+        }
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [userId, user?.avatar]);
+
+  const initial = (user?.name || user?.fullName || "U").charAt(0).toUpperCase();
+
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-gradient-to-br from-red-500 to-red-800 text-sm font-bold text-white shadow-lg shadow-red-950/30">
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={`${user?.name || "User"} avatar`}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span>{initial}</span>
+      )}
+    </div>
+  );
+};
 
 const navItems = [
   { label: "Home", path: "/" },
@@ -184,9 +236,7 @@ const Navbar = () => {
                   onClick={() => setAuthDropdownOpen((prev) => !prev)}
                   className="flex items-center gap-2 rounded-lg p-1.5 transition hover:bg-white/[0.06]"
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-800 text-white shadow-lg shadow-red-950/30">
-                    <UserRound size={17} />
-                  </div>
+                  <NavbarAvatar user={user} />
 
                   <span className="hidden max-w-28 truncate text-sm font-medium text-zinc-300 sm:block">
                     {user.name}

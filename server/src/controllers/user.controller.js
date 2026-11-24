@@ -55,18 +55,33 @@ export const uploadAvatar = async (req, res) => {
   }
 };
 
-export const getAvatar = async (req, res) => {
+const sendAvatar = async (req, res, userId) => {
   try {
-    const avatar = await getUserAvatar(req.user._id);
-
+    const avatar = await getUserAvatar(userId);
     res.setHeader("Content-Type", avatar.contentType);
     res.setHeader("Cache-Control", "private, max-age=3600");
-
+    avatar.body.on("error", (error) => {
+      console.error("Avatar stream failed:", error.message);
+      if (!res.headersSent) res.status(503).end();
+      else res.destroy(error);
+    });
     avatar.body.pipe(res);
   } catch (error) {
-    return res.status(404).json({
+    const missingAvatar =
+      error?.message === "User not found" ||
+      error?.message === "Avatar not found" ||
+      error?.name === "CastError";
+
+    console.error("Avatar retrieval failed:", error?.message || error);
+    return res.status(missingAvatar ? 404 : 503).json({
       success: false,
-      message: error.message,
+      message: missingAvatar ? error.message : "Avatar storage is temporarily unavailable",
     });
   }
 };
+
+export const getAvatar = async (req, res) =>
+  sendAvatar(req, res, req.user._id);
+
+export const getAvatarById = async (req, res) =>
+  sendAvatar(req, res, req.params.userId);

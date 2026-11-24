@@ -1,9 +1,47 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowLeft, Radio } from "lucide-react";
+import api from "../../../api/axios.js";
 
 const WatchRoomNavbar = ({ user }) => {
   const userName = user?.name || user?.fullName || "User";
+  const userId = String(user?._id || user?.id || "");
+  const [avatarUrl, setAvatarUrl] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+
+    setAvatarUrl("");
+
+    if (!userId || !user?.avatar) {
+      return () => {
+        active = false;
+      };
+    }
+
+    api
+      .get(`/users/${userId}/avatar`, { responseType: "blob" })
+      .then((response) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setAvatarUrl(objectUrl);
+      })
+      .catch((error) => {
+        if (active) {
+          console.warn(
+            "WatchRoom navbar avatar could not be loaded:",
+            error?.message,
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [userId, user?.avatar]);
 
   return (
     <motion.header
@@ -46,8 +84,16 @@ const WatchRoomNavbar = ({ user }) => {
             </span>
           </div>
 
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-gradient-to-br from-red-600 to-red-900 text-sm font-bold text-white">
-            {userName.charAt(0).toUpperCase()}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-gradient-to-br from-red-600 to-red-900 text-sm font-bold text-white">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={`${userName} avatar`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              userName.charAt(0).toUpperCase()
+            )}
           </div>
 
           <span className="hidden max-w-32 truncate text-sm font-medium text-gray-200 sm:block">

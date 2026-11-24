@@ -24,6 +24,9 @@ const getWatchSpace = async (watchSpaceId, userId) => {
   return { watchSpace, participant };
 };
 
+const hasJoinedWatchSpace = (socket, watchSpaceId) =>
+  socket.rooms.has(`watchspace:${watchSpaceId}`);
+
 const registerChatHandlers = (io, socket) => {
   // Send a chat message
   socket.on("chat.message.send", async (data, callback) => {
@@ -53,7 +56,7 @@ const registerChatHandlers = (io, socket) => {
         });
       }
 
-      if (!socket.rooms.has(`watchspace:${watchSpaceId}`)) {
+      if (!hasJoinedWatchSpace(socket, watchSpaceId)) {
         return callback?.({
           success: false,
           message: "Join the WatchSpace before sending messages",
@@ -93,6 +96,159 @@ const registerChatHandlers = (io, socket) => {
     }
   });
 
+  // Edit a message sent by the authenticated user
+  socket.on("chat.message.edit", async (data, callback) => {
+    try {
+      const { watchSpaceId, messageId, message } = data || {};
+
+      if (
+        !mongoose.isValidObjectId(watchSpaceId) ||
+        !mongoose.isValidObjectId(messageId)
+      ) {
+        return callback?.({
+          success: false,
+          message: "Invalid WatchSpace or message ID",
+        });
+      }
+
+      if (typeof message !== "string" || !message.trim()) {
+        return callback?.({
+          success: false,
+          message: "Message cannot be empty",
+        });
+      }
+
+      const normalizedMessage = message.trim();
+
+      if (normalizedMessage.length > 2000) {
+        return callback?.({
+          success: false,
+          message: "Message cannot exceed 2000 characters",
+        });
+      }
+
+      const result = await getWatchSpace(watchSpaceId, socket.data.userId);
+
+      if (!result || !hasJoinedWatchSpace(socket, watchSpaceId)) {
+        return callback?.({
+          success: false,
+          message: "WatchSpace not found or access denied",
+        });
+      }
+
+      // Only the original sender can edit this message.
+      const updatedMessage = await ChatMessage.findOneAndUpdate(
+        {
+          _id: messageId,
+          watchSpace: watchSpaceId,
+          sender: socket.data.userId,
+        },
+        {
+          $set: {
+            message: normalizedMessage,
+            editedAt: new Date(),
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        },
+      ).populate("sender", "name avatar");
+
+      if (!updatedMessage) {
+        return callback?.({
+          success: false,
+          message: "Message not found or you cannot edit this message",
+        });
+      }
+
+      const payload = {
+        event: "chat.message.updated",
+        watchSpaceId,
+        payload: updatedMessage,
+        ts: Date.now(),
+      };
+
+      io.to(`watchspace:${watchSpaceId}`).emit("chat.message.updated", payload);
+
+      return callback?.({
+        success: true,
+        message: updatedMessage,
+      });
+    } catch (error) {
+      console.error("Chat message edit failed:", error.message);
+
+      return callback?.({
+        success: false,
+        message: "Failed to edit message",
+      });
+    }
+  });
+
+  // Delete a message sent by the authenticated user
+  socket.on("chat.message.delete", async (data, callback) => {
+    try {
+      const { watchSpaceId, messageId } = data || {};
+
+      if (
+        !mongoose.isValidObjectId(watchSpaceId) ||
+        !mongoose.isValidObjectId(messageId)
+      ) {
+        return callback?.({
+          success: false,
+          message: "Invalid WatchSpace or message ID",
+        });
+      }
+
+      const result = await getWatchSpace(watchSpaceId, socket.data.userId);
+
+      if (!result || !hasJoinedWatchSpace(socket, watchSpaceId)) {
+        return callback?.({
+          success: false,
+          message: "WatchSpace not found or access denied",
+        });
+      }
+
+      // Only the original sender can delete this message.
+      const deletedMessage = await ChatMessage.findOneAndDelete({
+        _id: messageId,
+        watchSpace: watchSpaceId,
+        sender: socket.data.userId,
+      });
+
+      if (!deletedMessage) {
+        return callback?.({
+          success: false,
+          message: "Message not found or you cannot delete this message",
+        });
+      }
+
+      const payload = {
+        event: "chat.message.deleted",
+        watchSpaceId,
+        payload: {
+          messageId: deletedMessage._id.toString(),
+          deletedBy: socket.data.userId,
+        },
+        ts: Date.now(),
+      };
+
+      io.to(`watchspace:${watchSpaceId}`).emit("chat.message.deleted", payload);
+
+      return callback?.({
+        success: true,
+        messageId: deletedMessage._id.toString(),
+      });
+    } catch (error) {
+      console.error("Chat message delete failed:", error.message);
+
+      return callback?.({
+        success: false,
+        message: "Failed to delete message",
+      });
+    }
+  });
+
   // Retrieve recent chat history
   socket.on("chat.history.get", async (data, callback) => {
     try {
@@ -107,7 +263,7 @@ const registerChatHandlers = (io, socket) => {
         });
       }
 
-      if (!socket.rooms.has(`watchspace:${watchSpaceId}`)) {
+      if (!hasJoinedWatchSpace(socket, watchSpaceId)) {
         return callback?.({
           success: false,
           message: "Join the WatchSpace first",
@@ -145,7 +301,7 @@ const registerChatHandlers = (io, socket) => {
 
       const result = await getWatchSpace(watchSpaceId, socket.data.userId);
 
-      if (!result || !socket.rooms.has(`watchspace:${watchSpaceId}`)) {
+      if (!result || !hasJoinedWatchSpace(socket, watchSpaceId)) {
         return;
       }
 
@@ -181,7 +337,7 @@ const registerChatHandlers = (io, socket) => {
 
       const result = await getWatchSpace(watchSpaceId, socket.data.userId);
 
-      if (!result || !socket.rooms.has(`watchspace:${watchSpaceId}`)) {
+      if (!result || !hasJoinedWatchSpace(socket, watchSpaceId)) {
         return callback?.({
           success: false,
           message: "WatchSpace access denied",
@@ -201,7 +357,6 @@ const registerChatHandlers = (io, socket) => {
       }
 
       const userId = socket.data.userId;
-
       const normalizedEmoji = emoji.trim();
 
       const existingReactionIndex = chatMessage.reactions.findIndex(

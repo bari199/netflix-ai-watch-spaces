@@ -7,6 +7,7 @@ import {
   updateProfile,
   uploadAvatar,
   getAvatar,
+  getAvatarById,
 } from "../controllers/user.controller.js";
 
 const router = express.Router();
@@ -23,5 +24,7 @@ router.patch(
 );
 
 router.get("/me/avatar", authenticate, getAvatar);
+
+router.get("/:userId/avatar", authenticate, getAvatarById);
 
 export default router;
