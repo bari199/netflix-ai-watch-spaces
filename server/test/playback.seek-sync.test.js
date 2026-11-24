@@ -7,13 +7,15 @@ dotenv.config({ path: "../.env" });
 
 const hostToken = process.env.HOST_SOCKET_TEST_TOKEN;
 const viewerToken = process.env.VIEWER_SOCKET_TEST_TOKEN;
-const watchSpaceId = "6afda416ecfdba5cdc206371";
+const watchSpaceId = process.env.WATCH_SPACE_TEST_ID;
 
 const HOST_POSITION = 212;
 const VIEWER_POSITION = 211;
 
-if (!hostToken || !viewerToken) {
-  console.error("FAIL: Host or Viewer token is missing");
+if (!hostToken || !viewerToken || !watchSpaceId) {
+  console.error(
+    "FAIL: Host token, Viewer token or WATCH_SPACE_TEST_ID is missing",
+  );
   process.exit(1);
 }
 
@@ -86,7 +88,7 @@ const waitForCorrection = () =>
 
 const runTest = async () => {
   try {
-    await connectDB();
+    await connectDB({ useTestDatabase: true });
     console.log("PASS: Test MongoDB connected");
 
     await Promise.all([

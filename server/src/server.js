@@ -10,7 +10,9 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
-    await connectDB();
+    await connectDB({
+      useTestDatabase: process.env.NODE_ENV === "test",
+    });
     await initializeMinIO();
 
     const httpServer = http.createServer(app);

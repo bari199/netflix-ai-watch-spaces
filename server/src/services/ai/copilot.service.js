@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
+import { buildTimelineQuestions } from "./suggestions.service.js";
 import {
   getCanonicalTimelineContent,
   getCanonicalTimelineContentField,
@@ -502,6 +503,10 @@ const parseGroundedResponse = (modelResult, evidenceEvents, diagnose) => {
     answer: verifiedSelections.map(({ excerpt }) => excerpt).join("\n"),
     answerMode: "timeline",
     sourceEvents,
+    followUpQuestions: buildTimelineQuestions(
+      evidenceEvents.filter((event) => sourceEvents.includes(event.eventId)),
+      3,
+    ),
     generatedAt: new Date().toISOString(),
   };
 };

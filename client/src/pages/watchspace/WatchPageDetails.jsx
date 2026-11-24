@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 
 import {
   askWatchSpaceAI,
+  getWatchSpaceAISuggestions,
   getWatchSpaceById,
   joinWatchSpace,
   leaveWatchSpace,
@@ -66,6 +67,7 @@ const WatchPageDetails = () => {
   const [aiResponse, setAiResponse] = useState(null);
   const [aiError, setAiError] = useState(null);
   const [isAskingAI, setIsAskingAI] = useState(false);
+  const [aiSuggestedQuestions, setAiSuggestedQuestions] = useState([]);
 
   const [onlineParticipants, setOnlineParticipants] = useState([]);
   const [connectionLatency, setConnectionLatency] = useState(null);
@@ -348,38 +350,11 @@ const WatchPageDetails = () => {
       (first, second) => Number(second.startTime) - Number(first.startTime),
     )[0];
 
-  // Keep all four AI Co-Pilot prompt cards visible at every playback position.
-  // The backend remains responsible for grounding answers in available timeline metadata.
-  const aiSuggestedQuestions = [
-    {
-      type: "scene",
-      label: "Explain this scene",
-      question: "Explain the important scenes and events so far.",
-      description: "Understand scenes and story events",
-      icon: "🎬",
-    },
-    {
-      type: "characterAppearance",
-      label: "Explore characters",
-      question: "Which characters have appeared so far?",
-      description: "Explore character appearances",
-      icon: "👤",
-    },
-    {
-      type: "trivia",
-      label: "Interesting facts",
-      question: "What interesting facts are available so far?",
-      description: "Discover available trivia",
-      icon: "💡",
-    },
-    {
-      type: "glossary",
-      label: "Explain a term",
-      question: "Explain the important terms introduced so far.",
-      description: "Understand important terms",
-      icon: "📖",
-    },
-  ];
+  const latestTimelineEvent = (title?.timeline || [])
+    .filter((event) => Number(event.startTime) <= playbackPosition)
+    .sort((first, second) => Number(second.startTime) - Number(first.startTime))[0];
+
+  const aiSuggestionAnchor = latestTimelineEvent?.eventId || "timeline-start";
 
   const subtitleVariants = (
     Array.isArray(title?.subtitleVariants) ? title.subtitleVariants : []
@@ -430,6 +405,36 @@ const WatchPageDetails = () => {
         ) || preferredSubtitle;
   const currentAiResponse =
     aiResponse?.watchSpaceId === watchSpaceId ? aiResponse : null;
+
+  useEffect(() => {
+    if (!watchSpaceId || (!isHost && !isParticipant) || isEnded) {
+      setAiSuggestedQuestions([]);
+      return undefined;
+    }
+
+    let active = true;
+    getWatchSpaceAISuggestions(watchSpaceId)
+      .then((response) => {
+        if (active) {
+          setAiSuggestedQuestions(
+            Array.isArray(response?.suggestions) ? response.suggestions : [],
+          );
+        }
+      })
+      .catch((requestError) => {
+        if (active) {
+          console.warn(
+            "Unable to load playback-aware AI suggestions:",
+            requestError?.message || requestError,
+          );
+          setAiSuggestedQuestions([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [watchSpaceId, isHost, isParticipant, isEnded, aiSuggestionAnchor]);
   const currentAiError =
     aiError?.watchSpaceId === watchSpaceId ? aiError.message : "";
   const aiSourceEvents = (
@@ -1491,6 +1496,9 @@ const WatchPageDetails = () => {
         answer: response.answer,
         sourceEvents: Array.isArray(response.sourceEvents)
           ? response.sourceEvents
+          : [],
+        followUpQuestions: Array.isArray(response.followUpQuestions)
+          ? response.followUpQuestions
           : [],
       });
       setAiQuestion("");

@@ -7,7 +7,10 @@ import authorizeRoles, {
 } from "../middleware/role.middleware.js";
 import validate from "../middleware/validate.middleware.js";
 
-import { askWatchSpaceAIController } from "../controllers/ai.controller.js";
+import {
+  askWatchSpaceAIController,
+  getWatchSpaceAISuggestionsController,
+} from "../controllers/ai.controller.js";
 
 import {
   createWatchSpaceController,
@@ -91,6 +94,19 @@ router.get(
   param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
   validate,
   getWatchSpaceByIdController,
+);
+
+// ==========================================
+// Get playback-aware AI suggestions
+// ==========================================
+
+router.get(
+  "/:watchSpaceId/ai/suggestions",
+  authenticate,
+  allowWatchSpaceUsers,
+  param("watchSpaceId").isMongoId().withMessage("Invalid WatchSpace ID"),
+  validate,
+  getWatchSpaceAISuggestionsController,
 );
 
 // ==========================================

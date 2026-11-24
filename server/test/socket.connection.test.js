@@ -4,11 +4,10 @@ import { io } from "socket.io-client";
 dotenv.config({ path: "../.env" });
 
 const accessToken = process.env.SOCKET_TEST_TOKEN;
+const watchSpaceId = process.env.WATCH_SPACE_TEST_ID;
 
-const watchSpaceId = "6afda416ecfdba5cdc206371";
-
-if (!accessToken) {
-  console.error("SOCKET_TEST_TOKEN is missing");
+if (!accessToken || !watchSpaceId) {
+  console.error("FAIL: SOCKET_TEST_TOKEN or WATCH_SPACE_TEST_ID is missing");
   process.exit(1);
 }
 
