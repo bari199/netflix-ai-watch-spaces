@@ -344,6 +344,20 @@ const WatchPageDetails = () => {
 
   const isEnded = watchSpace?.status === "ended";
 
+  const title = watchSpace?.title;
+  const titleId = getUserId(title);
+  const displayTitle = title?.name || title?.title || "Untitled Movie";
+  const playbackPosition = Number(watchSpace?.playback?.positionSeconds) || 0;
+  const activeTimelineEvent = (title?.timeline || [])
+    .filter(
+      (event) =>
+        Number(event.startTime) <= playbackPosition &&
+        Number(event.endTime) >= playbackPosition,
+    )
+    .sort(
+      (first, second) => Number(second.startTime) - Number(first.startTime),
+    )[0];
+
   useEffect(() => {
     if (
       !watchSpaceId ||
@@ -360,12 +374,9 @@ const WatchPageDetails = () => {
 
     const fetchAISuggestions = async () => {
       setIsLoadingAISuggestions(true);
-
       try {
         const response = await getWatchSpaceAISuggestions(watchSpaceId);
-
         if (!isActive) return;
-
         setAiSuggestedQuestions(
           Array.isArray(response?.suggestions)
             ? response.suggestions.slice(0, 4)
@@ -373,36 +384,25 @@ const WatchPageDetails = () => {
         );
       } catch (suggestionError) {
         if (!isActive) return;
-
         console.error("Failed to load AI suggestions:", suggestionError);
         setAiSuggestedQuestions([]);
       } finally {
-        if (isActive) {
-          setIsLoadingAISuggestions(false);
-        }
+        if (isActive) setIsLoadingAISuggestions(false);
       }
     };
 
     fetchAISuggestions();
-
     return () => {
       isActive = false;
     };
-  }, [watchSpaceId, watchSpace?._id, isHost, isParticipant, isEnded]);
-
-  const title = watchSpace?.title;
-  const titleId = getUserId(title);
-  const displayTitle = title?.name || title?.title || "Untitled Movie";
-  const playbackPosition = Number(watchSpace?.playback?.positionSeconds) || 0;
-  const activeTimelineEvent = (title?.timeline || [])
-    .filter(
-      (event) =>
-        Number(event.startTime) <= playbackPosition &&
-        Number(event.endTime) >= playbackPosition,
-    )
-    .sort(
-      (first, second) => Number(second.startTime) - Number(first.startTime),
-    )[0];
+  }, [
+    watchSpaceId,
+    watchSpace?._id,
+    isHost,
+    isParticipant,
+    isEnded,
+    activeTimelineEvent?.eventId,
+  ]);
 
   const subtitleVariants = (
     Array.isArray(title?.subtitleVariants) ? title.subtitleVariants : []
@@ -1989,6 +1989,7 @@ const WatchPageDetails = () => {
                         activeSidebarTabRef.current = id;
                         setActiveSidebarTab(id);
                         if (id === "vote") setUnreadVoteCount(0);
+                        if (id === "chat") setUnreadChatCount(0);
                       }}
                       className={`flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl px-1.5 py-3 text-[10px] font-semibold transition sm:text-[11px] ${
                         isActive
