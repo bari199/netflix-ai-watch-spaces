@@ -143,8 +143,9 @@ export const buildTimelineQuestions = (
 
 export const getWatchSpaceAISuggestions = async (
   watchSpaceId,
-  { offset = 0, limit = 4 } = {},
+  options = {},
 ) => {
+  const { offset = 0, limit = 4 } = options || {};
   const context = await getTimelineEventsAtPlaybackPosition(watchSpaceId);
 
   const allSuggestions = buildTimelineQuestions(context.events);
