@@ -125,8 +125,23 @@ export const getWatchSpaceAISuggestionsController = async (req, res) => {
       });
     }
 
-    const offset = Number(req.query.offset ?? 0);
-    const limit = Number(req.query.limit ?? 4);
+    const rawOffset = req.query.offset ?? "0";
+    const rawLimit = req.query.limit ?? "4";
+    const offset = Number(rawOffset);
+    const limit = Number(rawLimit);
+
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 4
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "offset must be a non-negative integer and limit must be between 1 and 4",
+      });
+    }
 
     const result = await getWatchSpaceAISuggestions(watchSpaceId, {
       offset,
