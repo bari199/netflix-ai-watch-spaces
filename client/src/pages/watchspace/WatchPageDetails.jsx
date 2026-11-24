@@ -70,6 +70,8 @@ const WatchPageDetails = () => {
   const [isAskingAI, setIsAskingAI] = useState(false);
   const [aiSuggestedQuestions, setAiSuggestedQuestions] = useState([]);
   const [isLoadingAISuggestions, setIsLoadingAISuggestions] = useState(false);
+  const [aiSuggestionsNextOffset, setAiSuggestionsNextOffset] = useState(null);
+  const [aiSuggestionsHasMore, setAiSuggestionsHasMore] = useState(false);
 
   const [onlineParticipants, setOnlineParticipants] = useState([]);
   const [connectionLatency, setConnectionLatency] = useState(null);
@@ -344,6 +346,32 @@ const WatchPageDetails = () => {
 
   const isEnded = watchSpace?.status === "ended";
 
+  const loadMoreAISuggestions = async () => {
+    if (
+      !aiSuggestionsHasMore ||
+      aiSuggestionsNextOffset === null ||
+      isLoadingAISuggestions
+    ) return;
+
+    setIsLoadingAISuggestions(true);
+    try {
+      const response = await getWatchSpaceAISuggestions(watchSpaceId, {
+        offset: aiSuggestionsNextOffset,
+        limit: 4,
+      });
+      setAiSuggestedQuestions((previous) => [
+        ...previous,
+        ...(Array.isArray(response?.suggestions) ? response.suggestions : []),
+      ]);
+      setAiSuggestionsNextOffset(response?.nextOffset ?? null);
+      setAiSuggestionsHasMore(Boolean(response?.hasMore));
+    } catch (suggestionError) {
+      console.error("Failed to load more AI suggestions:", suggestionError);
+    } finally {
+      setIsLoadingAISuggestions(false);
+    }
+  };
+
   const title = watchSpace?.title;
   const titleId = getUserId(title);
   const displayTitle = title?.name || title?.title || "Untitled Movie";
@@ -366,6 +394,8 @@ const WatchPageDetails = () => {
       isEnded
     ) {
       setAiSuggestedQuestions([]);
+      setAiSuggestionsNextOffset(null);
+      setAiSuggestionsHasMore(false);
       setIsLoadingAISuggestions(false);
       return undefined;
     }
@@ -378,10 +408,10 @@ const WatchPageDetails = () => {
         const response = await getWatchSpaceAISuggestions(watchSpaceId);
         if (!isActive) return;
         setAiSuggestedQuestions(
-          Array.isArray(response?.suggestions)
-            ? response.suggestions.slice(0, 4)
-            : [],
+          Array.isArray(response?.suggestions) ? response.suggestions : [],
         );
+        setAiSuggestionsNextOffset(response?.nextOffset ?? null);
+        setAiSuggestionsHasMore(Boolean(response?.hasMore));
       } catch (suggestionError) {
         if (!isActive) return;
         console.error("Failed to load AI suggestions:", suggestionError);
@@ -2149,6 +2179,8 @@ const WatchPageDetails = () => {
                   <AICopilot
                     aiSuggestedQuestions={aiSuggestedQuestions}
                     isLoadingAISuggestions={isLoadingAISuggestions}
+                    hasMoreAISuggestions={aiSuggestionsHasMore}
+                    onLoadMoreAISuggestions={loadMoreAISuggestions}
                     aiQuestion={aiQuestion}
                     setAiQuestion={setAiQuestion}
                     handleAskAI={handleAskAI}
