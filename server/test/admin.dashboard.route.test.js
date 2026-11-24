@@ -12,6 +12,7 @@ import ChatMessage from "../src/models/ChatMessage.js";
 import adminRoutes from "../src/routes/admin.routes.js";
 
 const JWT_SECRET = "admin-dashboard-test-secret";
+const ADMIN_ID = "64f000000000000000000101";
 const VIEWER_ID = "64f000000000000000000102";
 const ENDPOINT = "/api/admin/dashboard/overview";
 
