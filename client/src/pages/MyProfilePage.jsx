@@ -427,35 +427,38 @@ function MyProfilePage() {
 
   // Load protected avatar from backend
   useEffect(() => {
+    let active = true;
     let objectUrl;
 
+    setServerAvatar("");
+
     const loadAvatar = async () => {
-      if (!user?.avatar) {
-        setServerAvatar("");
-        return;
-      }
+      if (!user?._id || !user?.avatar) return;
 
       try {
         const response = await api.get("/users/me/avatar", {
           responseType: "blob",
         });
 
+        if (!active) return;
+
         objectUrl = URL.createObjectURL(response.data);
         setServerAvatar(objectUrl);
       } catch (err) {
-        console.error("Avatar loading failed:", err);
-        setServerAvatar("");
+        if (active) {
+          console.error("Avatar loading failed:", err);
+          setServerAvatar("");
+        }
       }
     };
 
     loadAvatar();
 
     return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [user?.avatar]);
+  }, [user?._id, user?.avatar]);
 
   // Generate preview for newly selected avatar
   useEffect(() => {
@@ -887,14 +890,19 @@ function MyProfilePage() {
             <Volume2 size={18} className="text-zinc-400" />
             <span>
               <span className="block text-sm font-medium">Sound effects</span>
-              <span className="block text-xs text-zinc-500">Enable interface sound feedback</span>
+              <span className="block text-xs text-zinc-500">
+                Enable interface sound feedback
+              </span>
             </span>
           </span>
           <input
             type="checkbox"
             checked={notificationPreferences.soundEnabled}
             onChange={(event) =>
-              handleNotificationPreferenceChange("soundEnabled", event.target.checked)
+              handleNotificationPreferenceChange(
+                "soundEnabled",
+                event.target.checked,
+              )
             }
             disabled={notificationSaving}
             className="size-4 accent-[#e50914] disabled:cursor-not-allowed disabled:opacity-50"
@@ -905,15 +913,22 @@ function MyProfilePage() {
           <span className="flex items-center gap-3">
             <Vibrate size={18} className="text-zinc-400" />
             <span>
-              <span className="block text-sm font-medium">Vibration feedback</span>
-              <span className="block text-xs text-zinc-500">Enable vibration where supported</span>
+              <span className="block text-sm font-medium">
+                Vibration feedback
+              </span>
+              <span className="block text-xs text-zinc-500">
+                Enable vibration where supported
+              </span>
             </span>
           </span>
           <input
             type="checkbox"
             checked={notificationPreferences.vibrationEnabled}
             onChange={(event) =>
-              handleNotificationPreferenceChange("vibrationEnabled", event.target.checked)
+              handleNotificationPreferenceChange(
+                "vibrationEnabled",
+                event.target.checked,
+              )
             }
             disabled={notificationSaving}
             className="size-4 accent-[#e50914] disabled:cursor-not-allowed disabled:opacity-50"
@@ -922,112 +937,114 @@ function MyProfilePage() {
         {notificationError && (
           <StatusMessage type="error">{notificationError}</StatusMessage>
         )}
-        {notificationMessage && <StatusMessage>{notificationMessage}</StatusMessage>}
+        {notificationMessage && (
+          <StatusMessage>{notificationMessage}</StatusMessage>
+        )}
       </section>
 
       <div className="border-t border-white/10 pt-5">
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#e50914]/10 text-[#e50914]">
-          <KeyRound size={17} />
-        </span>
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#e50914]/10 text-[#e50914]">
+            <KeyRound size={17} />
+          </span>
 
-        <div>
-          <h3 className="text-sm font-semibold">Reset password</h3>
-          <p className="mt-0.5 text-xs leading-5 text-zinc-400">
-            We&apos;ll email a 6-digit code to confirm it&apos;s you.
-          </p>
-        </div>
-      </div>
-
-      <FloatingField
-        id="settingsEmail"
-        label="Email"
-        type="email"
-        value={user?.email || ""}
-        disabled
-      />
-
-      {!otpSent ? (
-        <NetflixButton
-          type="button"
-          icon={Mail}
-          loading={otpLoading}
-          onClick={handleSendResetOtp}
-        >
-          {otpLoading ? "Sending OTP..." : "Send OTP"}
-        </NetflixButton>
-      ) : (
-        <form onSubmit={handleResetPassword} className="space-y-3">
-          <FloatingField
-            id="settingsOtp"
-            label="6-digit code"
-            hint="Expires in 10 minutes."
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={otp}
-            onChange={(event) =>
-              setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-            }
-            required
-            disabled={otpLoading}
-            inputClassName="font-medium tracking-[0.3em]"
-          />
-
-          <FloatingField
-            id="settingsNewPassword"
-            label="New password"
-            type="password"
-            hint="At least 8 characters."
-            autoComplete="new-password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            minLength={8}
-            required
-            disabled={otpLoading}
-          />
-
-          <FloatingField
-            id="settingsConfirmPassword"
-            label="Confirm new password"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            minLength={8}
-            required
-            disabled={otpLoading}
-          />
-
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <NetflixButton type="submit" loading={otpLoading}>
-              {otpLoading ? "Resetting..." : "Reset password"}
-            </NetflixButton>
-
-            <NetflixButton
-              type="button"
-              variant="ghost"
-              onClick={handleCancelOtp}
-              disabled={otpLoading}
-            >
-              Cancel
-            </NetflixButton>
-
-            <NetflixButton
-              type="button"
-              variant="link"
-              onClick={handleSendResetOtp}
-              disabled={otpLoading}
-              className="ml-auto"
-            >
-              Resend OTP
-            </NetflixButton>
+          <div>
+            <h3 className="text-sm font-semibold">Reset password</h3>
+            <p className="mt-0.5 text-xs leading-5 text-zinc-400">
+              We&apos;ll email a 6-digit code to confirm it&apos;s you.
+            </p>
           </div>
-        </form>
-      )}
+        </div>
 
-      {otpError && <StatusMessage type="error">{otpError}</StatusMessage>}
-      {otpMessage && <StatusMessage>{otpMessage}</StatusMessage>}
+        <FloatingField
+          id="settingsEmail"
+          label="Email"
+          type="email"
+          value={user?.email || ""}
+          disabled
+        />
+
+        {!otpSent ? (
+          <NetflixButton
+            type="button"
+            icon={Mail}
+            loading={otpLoading}
+            onClick={handleSendResetOtp}
+          >
+            {otpLoading ? "Sending OTP..." : "Send OTP"}
+          </NetflixButton>
+        ) : (
+          <form onSubmit={handleResetPassword} className="space-y-3">
+            <FloatingField
+              id="settingsOtp"
+              label="6-digit code"
+              hint="Expires in 10 minutes."
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={otp}
+              onChange={(event) =>
+                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              required
+              disabled={otpLoading}
+              inputClassName="font-medium tracking-[0.3em]"
+            />
+
+            <FloatingField
+              id="settingsNewPassword"
+              label="New password"
+              type="password"
+              hint="At least 8 characters."
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              minLength={8}
+              required
+              disabled={otpLoading}
+            />
+
+            <FloatingField
+              id="settingsConfirmPassword"
+              label="Confirm new password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              minLength={8}
+              required
+              disabled={otpLoading}
+            />
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <NetflixButton type="submit" loading={otpLoading}>
+                {otpLoading ? "Resetting..." : "Reset password"}
+              </NetflixButton>
+
+              <NetflixButton
+                type="button"
+                variant="ghost"
+                onClick={handleCancelOtp}
+                disabled={otpLoading}
+              >
+                Cancel
+              </NetflixButton>
+
+              <NetflixButton
+                type="button"
+                variant="link"
+                onClick={handleSendResetOtp}
+                disabled={otpLoading}
+                className="ml-auto"
+              >
+                Resend OTP
+              </NetflixButton>
+            </div>
+          </form>
+        )}
+
+        {otpError && <StatusMessage type="error">{otpError}</StatusMessage>}
+        {otpMessage && <StatusMessage>{otpMessage}</StatusMessage>}
       </div>
     </div>
   );

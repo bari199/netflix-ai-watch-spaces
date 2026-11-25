@@ -59,7 +59,11 @@ const sendAvatar = async (req, res, userId) => {
   try {
     const avatar = await getUserAvatar(userId);
     res.setHeader("Content-Type", avatar.contentType);
-    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.setHeader(
+      "Cache-Control",
+      "private, no-store, no-cache, must-revalidate, max-age=0",
+    );
+    res.setHeader("Vary", "Authorization");
     avatar.body.on("error", (error) => {
       console.error("Avatar stream failed:", error.message);
       if (!res.headersSent) res.status(503).end();
@@ -75,13 +79,14 @@ const sendAvatar = async (req, res, userId) => {
     console.error("Avatar retrieval failed:", error?.message || error);
     return res.status(missingAvatar ? 404 : 503).json({
       success: false,
-      message: missingAvatar ? error.message : "Avatar storage is temporarily unavailable",
+      message: missingAvatar
+        ? error.message
+        : "Avatar storage is temporarily unavailable",
     });
   }
 };
 
-export const getAvatar = async (req, res) =>
-  sendAvatar(req, res, req.user._id);
+export const getAvatar = async (req, res) => sendAvatar(req, res, req.user._id);
 
 export const getAvatarById = async (req, res) =>
   sendAvatar(req, res, req.params.userId);
