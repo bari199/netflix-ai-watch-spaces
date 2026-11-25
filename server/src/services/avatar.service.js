@@ -17,16 +17,6 @@ const isAllowedHost = (hostname) =>
     (host) => hostname === host || hostname.endsWith(`.${host}`),
   );
 
-const getPublicAvatarUrl = (key) => {
-  const publicUrl = process.env.MINIO_ENDPOINT;
-
-  if (!publicUrl) {
-    throw new Error("MINIO_ENDPOINT is not configured");
-  }
-
-  return `${publicUrl.replace(/\/$/, "")}/${MINIO_BUCKET}/${key}`;
-};
-
 // ==========================================
 // Google / Facebook OAuth Avatar
 // ==========================================
@@ -92,11 +82,10 @@ export const uploadAvatarFromUrl = async (imageUrl, provider) => {
         Body: buffer,
         ContentType: contentType,
         ContentLength: buffer.length,
-        CacheControl: "public, max-age=31536000",
       }),
     );
 
-    return getPublicAvatarUrl(key);
+    return key;
   } finally {
     clearTimeout(timeout);
   }
@@ -128,9 +117,8 @@ export const uploadAvatarBuffer = async (file) => {
       Body: file.buffer,
       ContentType: file.mimetype,
       ContentLength: file.size,
-      CacheControl: "public, max-age=31536000",
     }),
   );
 
-  return getPublicAvatarUrl(key);
+  return key;
 };

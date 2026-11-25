@@ -1,23 +1,23 @@
-netflix-ai-watch-spaces/
+server/
+├── scripts/
+│   ├── seed-avengers-endgame.js
+│   ├── seed-avengers-infinity-war.js
+│   └── seed-tron-ares.js
 │
-├── client/
-│   └── React frontend
+├── seed-data/
+│   ├── avengers-endgame.txt
+│   ├── avengers-infinity-war.txt
+│   └── tron-ares.txt
 │
-├── server/
-│   ├── scripts/
-│   │   └── seed-avengers-infinity-war.js
-│   └── seed-data/
-│       └── avengers-infinity-war.txt
+video/
+├── avengers-endgame/
+│   ├── Avengers-Endgame.mp4
+│   └── thumbnail.jpg
 │
-├── video/
-│   └── avengers-infinity-war/
-│       ├── Avengers-Infinity-War.mp4
-│       └── thumbnail.jpg
+├── avengers-infinity-war/
+│   ├── Avengers-Infinity-War.mp4
+│   └── thumbnail.jpg
 │
-└── docs/
-    └── structure.txt
-
-Note:
-- The Avengers: Endgame seed script, seed data, and thumbnail were removed from this branch.
-- Large video assets should not be committed directly to Git; use the configured object storage (MinIO) for video assets.
-- This is a high-level map of the project areas, not a complete file-by-file listing.
+└── tron-ares/
+    ├── Tron-Ares.mp4
+    └── thumbnail.jpg

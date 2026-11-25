@@ -8,7 +8,10 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "evaluate:recommendations": "node scripts/evaluate-recommendations.js",
-    "seed:tron": "node scripts/seed-tron-ares.js"
+    "seed:tron": "node scripts/seed-tron-ares.js",
+    "test:b2": "node scripts/test-b2-connection.js",
+    "seed:infinity-war": "node scripts/seed-avengers-infinity-war.js",
+    "seed:endgame": "node scripts/seed-avengers-endgame.js"
   },
   "keywords": [],
   "author": "",
