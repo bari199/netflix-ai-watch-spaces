@@ -173,9 +173,10 @@ function QuickRejoinRooms() {
           className="flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {rooms.map((room) => {
-            const thumbnailUrl = room.title?._id
-              ? `${API_BASE_URL}/titles/${room.title._id}/thumbnail`
-              : null;
+            const thumbnailUrl =
+              room.title?._id && room.title?.thumbnailKey
+                ? `${API_BASE_URL}/titles/${room.title._id}/thumbnail`
+                : null;
 
             return (
               <motion.article
@@ -188,7 +189,7 @@ function QuickRejoinRooms() {
                 className="group relative w-[245px] shrink-0 snap-start overflow-hidden rounded-xl border border-white/10 bg-[#17171b] transition-colors duration-300 hover:border-red-500/50 sm:w-[265px]"
               >
                 {/* Thumbnail */}
-                <div className="relative h-[138px] overflow-hidden bg-zinc-800">
+                <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-zinc-800 via-zinc-900 to-black">
                   {thumbnailUrl ? (
                     <img
                       src={thumbnailUrl}
@@ -211,6 +212,9 @@ function QuickRejoinRooms() {
                   )}
 
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/10" />
+                  <div className="absolute inset-0 hidden items-center justify-center">
+                    <Film size={30} className="text-zinc-500" />
+                  </div>
 
                   {/* Live badge */}
                   <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-green-500/20 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-green-400 backdrop-blur">
@@ -234,19 +238,19 @@ function QuickRejoinRooms() {
                 </div>
 
                 {/* Card content */}
-                <div className="p-3.5">
-                  <h3 className="truncate text-base font-bold text-white transition-colors group-hover:text-red-400">
+                <div className="p-3">
+                  <h3 className="truncate text-sm font-bold text-white transition-colors group-hover:text-red-400">
                     {room.title?.name || "Watch Space"}
                   </h3>
 
-                  <p className="mt-1 truncate text-xs text-zinc-400">
+                  <p className="mt-1 truncate text-[11px] text-zinc-400">
                     Hosted by {room.host?.name || "Unknown"}
                   </p>
 
                   {/* Rejoin button */}
-                  <div className="relative mt-3 h-9 overflow-hidden rounded-lg">
+                  <div className="relative mt-3 h-8 overflow-hidden rounded-full">
                     {/* Default button */}
-                    <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-lg bg-white/[0.07] text-xs font-semibold text-zinc-300 transition-colors duration-300 group-hover:bg-red-600 group-hover:text-white">
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-full bg-white/[0.07] text-[11px] font-semibold text-zinc-300 transition-colors duration-300 group-hover:bg-red-600 group-hover:text-white">
                       <Play size={13} fill="currentColor" />
                       Rejoin Room
                     </div>
@@ -269,7 +273,7 @@ function QuickRejoinRooms() {
                         damping: 25,
                       }}
                       onClick={() => navigate(`/watch-spaces/${room._id}`)}
-                      className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-lg bg-[#e50914] text-xs font-bold text-white hover:bg-red-500"
+                      className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-full bg-[#e50914] text-[11px] font-bold text-white hover:bg-red-500"
                     >
                       <Play size={13} fill="currentColor" />
                       Rejoin Room
