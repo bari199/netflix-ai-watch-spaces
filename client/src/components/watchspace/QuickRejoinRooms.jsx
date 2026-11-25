@@ -203,6 +203,7 @@ function QuickRejoinRooms() {
                           "items-center",
                           "justify-center",
                         );
+                        event.currentTarget.nextElementSibling?.classList.remove("hidden");
                       }}
                     />
                   ) : (
