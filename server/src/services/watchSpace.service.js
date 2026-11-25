@@ -414,8 +414,21 @@ export const getMyHostedWatchSpaces = async (userId, limit = 20) => {
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
 
   return WatchSpace.find({
-    host: userId,
     status: { $in: ["scheduled", "waiting", "active", "ended"] },
+    $or: [
+      // Canonical ownership field used by newly created WatchSpaces.
+      { host: userId },
+      // Compatibility for existing records where the participant host
+      // role exists but the top-level host field is out of sync.
+      {
+        participants: {
+          $elemMatch: {
+            user: userId,
+            role: "host",
+          },
+        },
+      },
+    ],
   })
     .populate("title", "name description duration thumbnailKey")
     .populate("host", "name avatar")
