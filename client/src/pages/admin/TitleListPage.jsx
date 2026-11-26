@@ -49,8 +49,9 @@ import {
 
 import { ErrorAlert, PageHeader } from "../../components/admin/adminUi.jsx";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
+).replace(/\/+$/, "");
 
 const PAGE_SIZE = 8;
 
@@ -110,7 +111,16 @@ const Thumbnail = ({ title, className = "" }) => {
       src={`${API_BASE_URL}/titles/${title._id}/thumbnail`}
       alt={title.name}
       loading="lazy"
-      onError={() => setFailed(true)}
+      onError={(event) => {
+        console.error("Title thumbnail failed:", {
+          title: title.name,
+          titleId: title._id,
+          thumbnailKey: title.thumbnailKey,
+          imageUrl: event.currentTarget.src,
+        });
+
+        setFailed(true);
+      }}
       className={`aspect-video rounded-md border border-white/10 object-cover ${className}`}
     />
   );
