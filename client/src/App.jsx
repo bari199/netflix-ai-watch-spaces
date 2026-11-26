@@ -16,7 +16,7 @@ import CreateTitlePage from "./pages/admin/CreateTitlePage.jsx";
 import EditTitlePage from "./pages/admin/EditTitlePage.jsx";
 
 import WatchSpacesPage from "./pages/watchspace/WatchSpacesPage.jsx";
-import WatchPageDetails from "./pages/watchspace/watchPageDetails.jsx";
+import WatchPageDetails from "./pages/watchspace/WatchPageDetails.jsx";
 import CreateWatchSpacePage from "./pages/watchspace/CreateWatchSpacePage.jsx";
 
 import RecommendedForYou from "./components/titles/RecommendedForYou.jsx";
