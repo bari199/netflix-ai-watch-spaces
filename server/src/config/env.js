@@ -1,6 +1,17 @@
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-dotenv.config({ path: "../.env" });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Development: Load root .env file.
+// Production: Use environment variables from hosting platform.
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({
+    path: path.resolve(__dirname, "../../../.env"),
+  });
+}
 
 const requiredEnvVariables = [
   "MONGODB_URI",
@@ -20,7 +31,11 @@ const requiredEnvVariables = [
 ];
 
 for (const variable of requiredEnvVariables) {
-  if (!process.env[variable]) {
+  if (!process.env[variable]?.trim()) {
     throw new Error(`${variable} is not configured`);
   }
 }
+
+console.log(
+  `Environment variables loaded for ${process.env.NODE_ENV || "development"}`,
+);
