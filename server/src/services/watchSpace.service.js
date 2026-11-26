@@ -452,3 +452,17 @@ export const deleteWatchSpace = async (watchSpaceId, hostId) => {
 
   return watchSpace;
 };
+
+// Get all WatchSpaces hosted or joined by the logged-in user.
+export const getMyWatchSpaces = async (userId, limit = 50) => {
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+
+  return WatchSpace.find({
+    status: { $in: ["scheduled", "waiting", "active", "ended"] },
+    $or: [{ host: userId }, { "participants.user": userId }],
+  })
+    .populate("title", "name description duration thumbnailKey")
+    .populate("host", "name avatar")
+    .sort({ updatedAt: -1 })
+    .limit(safeLimit);
+};

@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
+
 import { Play, Users, Sparkles, ArrowRight, Clapperboard } from "lucide-react";
+
 import { useAuth } from "@/context/AuthContext";
 import heroImage from "@/assets/hero.png";
 
@@ -26,6 +29,26 @@ const itemVariants = {
 const HeroSection = () => {
   const { user } = useAuth();
 
+  // Typewriter animation
+  const fullHeading = "Every Screen. Every Friend. One Experience.";
+  const [typedHeading, setTypedHeading] = useState("");
+
+  useEffect(() => {
+    let index = 0;
+
+    const typingInterval = setInterval(() => {
+      index++;
+
+      setTypedHeading(fullHeading.slice(0, index));
+
+      if (index >= fullHeading.length) {
+        clearInterval(typingInterval);
+      }
+    }, 65);
+
+    return () => clearInterval(typingInterval);
+  }, []);
+
   return (
     <section className="relative isolate min-h-[560px] overflow-hidden bg-[#09090b] sm:min-h-[650px]">
       {/* Cinematic background */}
@@ -48,8 +71,15 @@ const HeroSection = () => {
 
       {/* Subtle red ambient glow */}
       <motion.div
-        animate={{ opacity: [0.15, 0.3, 0.15], scale: [1, 1.15, 1] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+        animate={{
+          opacity: [0.15, 0.3, 0.15],
+          scale: [1, 1.15, 1],
+        }}
+        transition={{
+          duration: 7,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
         className="pointer-events-none absolute -left-32 top-1/3 -z-10 h-80 w-80 rounded-full bg-red-600/20 blur-[120px]"
       />
 
@@ -69,18 +99,31 @@ const HeroSection = () => {
             THE ULTIMATE SOCIAL WATCH EXPERIENCE
           </motion.div>
 
-          {/* Main heading */}
+          {/* Main heading with Typewriter Animation */}
           <motion.h1
             variants={itemVariants}
             className="text-balance text-4xl font-black leading-[1.1] tracking-tight text-white sm:text-6xl lg:text-7xl"
+            aria-label={fullHeading}
           >
-            Every Screen.
-            <br />
-            Every Friend.
-            <br />
-            <span className="bg-gradient-to-r from-[#ff2633] via-[#e50914] to-[#a8000a] bg-clip-text text-transparent">
-              One Experience.
-            </span>
+            {typedHeading.split(" ").map((word, index, words) => (
+              <span
+                key={index}
+                className={
+                  word === "Experience."
+                    ? "bg-gradient-to-r from-[#ff2633] via-[#e50914] to-[#a8000a] bg-clip-text text-transparent"
+                    : ""
+                }
+              >
+                {word}
+                {index < words.length - 1 ? " " : ""}
+              </span>
+            ))}
+
+            {/* Blinking typing cursor */}
+            <span
+              className="ml-1 inline-block h-[0.85em] w-[3px] translate-y-1 animate-pulse bg-[#e50914]"
+              aria-hidden="true"
+            />
           </motion.h1>
 
           {/* Description */}
@@ -136,9 +179,11 @@ const HeroSection = () => {
               <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#18181b] bg-red-600">
                 <Users size={13} className="text-white" />
               </span>
+
               <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#18181b] bg-blue-600">
                 <Play size={12} className="text-white" />
               </span>
+
               <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#18181b] bg-purple-600">
                 <Sparkles size={13} className="text-white" />
               </span>
@@ -149,6 +194,7 @@ const HeroSection = () => {
             </span>
           </motion.div>
 
+          {/* Bottom tagline */}
           <motion.div
             variants={itemVariants}
             className="mt-7 flex items-center gap-2 text-xs font-medium uppercase tracking-[2px] text-zinc-500"

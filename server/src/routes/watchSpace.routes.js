@@ -29,6 +29,7 @@ import {
   getMyEndedWatchSpacesController,
   getMyHostedWatchSpacesController,
   deleteWatchSpaceController,
+  getMyWatchSpacesController,
 } from "../controllers/watchSpace.controller.js";
 
 const router = express.Router();
@@ -73,6 +74,14 @@ router.get(
   authenticate,
   allowWatchSpaceUsers,
   getMyEndedWatchSpacesController,
+);
+
+// Get all WatchSpaces hosted or joined by the logged-in user.
+router.get(
+  "/my",
+  authenticate,
+  allowWatchSpaceUsers,
+  getMyWatchSpacesController,
 );
 
 // Get all WatchSpaces hosted by the logged-in user

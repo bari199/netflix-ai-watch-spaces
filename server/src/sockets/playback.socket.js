@@ -133,7 +133,6 @@ export const triggerDueTriviaEvents = async (
   }
 };
 
-
 export const applyDueVariation = async (
   io,
   watchSpaceId,
@@ -188,7 +187,11 @@ export const applyDueVariation = async (
   }
 };
 
-export const applyDueClosedVariation = async (io, watchSpaceId, currentPosition) => {
+export const applyDueClosedVariation = async (
+  io,
+  watchSpaceId,
+  currentPosition,
+) => {
   if (!Number.isFinite(currentPosition) || currentPosition < 0) return;
 
   try {
@@ -398,7 +401,6 @@ const registerPlaybackHandlers = (io, socket) => {
         mode,
         updatedBy: getUserId(),
       });
-
     } catch (error) {
       if (typeof callback === "function") {
         callback({ success: false, message: error.message });
@@ -458,7 +460,7 @@ const registerPlaybackHandlers = (io, socket) => {
           watchSpace.startedAt = new Date();
         }
 
-        if (watchSpace.status === "waiting") {
+        if (["waiting", "scheduled"].includes(watchSpace.status)) {
           watchSpace.status = "active";
         }
       } else if (action === "pause") {

@@ -151,6 +151,15 @@ export const getMyHostedWatchSpaces = async () => {
   return response.data;
 };
 
+// Get all WatchSpaces hosted or joined by the logged-in user.
+export const getMyWatchSpaces = async (limit = 50) => {
+  const response = await api.get("/watch-spaces/my", {
+    params: { limit },
+  });
+
+  return response.data;
+};
+
 // Delete a WatchSpace hosted by the logged-in user
 export const deleteWatchSpace = async (watchSpaceId) => {
   const response = await api.delete(`/watch-spaces/${watchSpaceId}`);
